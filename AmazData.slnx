@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="AmazData.Module.Mqtt/AmazData.Module.Mqtt.csproj" />
   <Project Path="AmazData.Web/AmazData.Web.csproj" />
 </Solution>
