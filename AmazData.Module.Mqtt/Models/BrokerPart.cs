@@ -6,7 +6,6 @@ namespace AmazData.Module.Mqtt.Models;
 
 public class BrokerPart : ContentPart
 {
-    public TextField ServerName { get; set; } = new TextField();
     public TextField BrokerAddress { get; set; } = new TextField();
     public TextField Port { get; set; } = new TextField();
     public TextField ClientId { get; set; } = new TextField();
