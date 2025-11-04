@@ -23,4 +23,8 @@
     <PackageReference Include="OrchardCore.Application.Cms.Targets" Version="2.2.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../AmazData.Module.Mqtt/AmazData.Module.Mqtt.csproj" />
+  </ItemGroup>
+
 </Project>
