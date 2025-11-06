@@ -13,4 +13,11 @@ public sealed class HomeController : Controller
     {
         return View();
     }
+
+    public ActionResult Run(string contentItemId)
+    {
+        // You can add your logic here to "run" the broker item.
+        // For example, you could use the IMqttConnectionManager to connect.
+        return Content($"Running broker with ContentItemId: {contentItemId}");
+    }
 }

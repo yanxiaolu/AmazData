@@ -1,0 +1,16 @@
+@using OrchardCore.ContentManagement
+@using OrchardCore.Contents
+
+@model dynamic
+
+@{
+    ContentItem contentItem = Model.ContentItem;
+    var runUrl = Url.Action("Run", "Home", new
+    {
+        area = "AmazData.Module.Mqtt",
+        contentItemId = contentItem.ContentItemId
+    });
+}
+
+<a asp-route-action="Run" asp-route-controller="Home" asp-route-area="AmazData.Module.Mqtt"
+    asp-route-contentItemId="@contentItem.ContentItemId" class="btn btn-success btn-sm">Run</a>
