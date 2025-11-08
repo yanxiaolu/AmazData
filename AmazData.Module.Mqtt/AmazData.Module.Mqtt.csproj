@@ -12,13 +12,16 @@
   </ItemGroup>
 
   <ItemGroup>
+
     <PackageReference Include="MQTTnet" Version="5.0.1.1416" />
-    <PackageReference Include="MQTTnet.Extensions.ManagedClient" Version="4.3.7.1207" />
+
     <PackageReference Include="OrchardCore.ContentFields" Version="2.2.1" />
+    <PackageReference Include="OrchardCore.Contents" Version="2.2.1" />
     <PackageReference Include="OrchardCore.Module.Targets" Version="2.2.1" />
     <PackageReference Include="OrchardCore.ContentManagement" Version="2.2.1" />
     <PackageReference Include="OrchardCore.ContentTypes.Abstractions" Version="2.2.1" />
     <PackageReference Include="OrchardCore.DisplayManagement" Version="2.2.1" />
+    <PackageReference Include="OrchardCore.Users" Version="2.2.1" />
   </ItemGroup>
 
 </Project>

@@ -34,27 +34,16 @@ namespace AmazData.Module.Mqtt.Services
                 return null;
             }
 
-            // --- Example properties (replace with your actual BrokerPart fields) ---
-            // You will need to access the properties of your BrokerPart here.
-            // For example, if BrokerPart has properties like Server, Port, Username, Password, UseTls:
-            // var server = brokerPart.Server.Text;
-            // var port = (int)brokerPart.Port.Value;
-            // var username = brokerPart.Username.Text;
-            // var password = brokerPart.Password.Text;
-            // var useTls = brokerPart.UseTls.Value;
-
-            // Placeholder values for demonstration:
-            var server = "broker.hivemq.com";
-            var port = 1883;
-            var username = ""; // Example: brokerPart.Username.Text;
-            var password = ""; // Example: brokerPart.Password.Text;
-            var useTls = false; // Example: brokerPart.UseTls.Value;
+            var server = brokerPart.BrokerAddress.Text;
+            var portText = brokerPart.Port.Text;
+            var username = brokerPart.Username.Text;
+            var password = brokerPart.Password.Text;
+            var useTls = brokerPart.UseSSL.Value;
             var clientId = $"AmazData-{System.Environment.MachineName}-{brokerItemId}";
-            // --- End of example properties ---
 
-            if (string.IsNullOrWhiteSpace(server))
+            if (string.IsNullOrWhiteSpace(server) || !int.TryParse(portText, out var port))
             {
-                _logger.LogError("Server is not configured for Broker '{BrokerItemId}'.", brokerItemId);
+                _logger.LogError("Server or Port is not configured correctly for Broker '{BrokerItemId}'.", brokerItemId);
                 return null;
             }
 
@@ -70,15 +59,12 @@ namespace AmazData.Module.Mqtt.Services
             if (useTls)
             {
                 optionsBuilder.WithTlsOptions(
-                o =>
-                {
-                    // The used public broker sometimes has invalid certificates. This sample accepts all
-                    // certificates. This should not be used in live environments.
-                    o.WithCertificateValidationHandler(_ => true);
-
-                    // The default value is determined by the OS. Set manually to force version.
-                    o.WithSslProtocols(SslProtocols.Tls12);
-                });
+                    new MqttClientTlsOptions
+                    {
+                        UseTls = true,
+                        AllowUntrustedCertificates = true, // Accepts all certificates, should not be used in live environments.
+                        SslProtocol = SslProtocols.Tls12
+                    });
             }
 
             return optionsBuilder.Build();

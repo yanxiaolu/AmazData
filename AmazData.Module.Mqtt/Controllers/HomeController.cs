@@ -1,23 +1,43 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using OrchardCore.ContentManagement;
+using System.Threading.Tasks;
+using AmazData.Module.Mqtt.Services;
 
-namespace AmazData.Module.Mqtt.Controllers;
-
-public sealed class HomeController : Controller
+namespace AmazData.Module.Mqtt.Controllers
 {
-    public ActionResult Index()
+    public class HomeController : Controller
     {
-        return View();
-    }
+        private readonly IContentManager _contentManager;
+        private readonly IMqttConnectionManager _mqttConnectionManager;
+        private readonly IMqttOptionsBuilderService _mqttOptionsBuilderService;
 
-    public ActionResult Run(string contentItemId)
-    {
-        // You can add your logic here to "run" the broker item.
-        // For example, you could use the IMqttConnectionManager to connect.
-        return Content($"Running broker with ContentItemId: {contentItemId}");
+        public HomeController(
+            IContentManager contentManager,
+            IMqttConnectionManager mqttConnectionManager,
+            IMqttOptionsBuilderService mqttOptionsBuilderService)
+        {
+            _contentManager = contentManager;
+            _mqttConnectionManager = mqttConnectionManager;
+            _mqttOptionsBuilderService = mqttOptionsBuilderService;
+        }
+
+        public async Task<IActionResult> Index(string brokerId)
+        {
+            var contentItem = await _contentManager.GetAsync(brokerId);
+
+            if (contentItem == null)
+            {
+                return NotFound();
+            }
+
+            var options = await _mqttOptionsBuilderService.BuildOptionsAsync(brokerId);
+
+            if (options != null)
+            {
+                await _mqttConnectionManager.ConnectAsync(brokerId, options);
+            }
+
+            return View(contentItem);
+        }
     }
 }

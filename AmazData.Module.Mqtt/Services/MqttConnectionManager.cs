@@ -1,4 +1,3 @@
-
 using Microsoft.Extensions.Logging;
 using MQTTnet;
 using System.Collections.Concurrent;
@@ -19,6 +18,12 @@ namespace AmazData.Module.Mqtt.Services
             _mqttClientFactory = new MqttClientFactory();
         }
 
+        public Task<IMqttClient?> GetClientAsync(string connectionId)
+        {
+            _clients.TryGetValue(connectionId, out var client);
+            return Task.FromResult(client);
+        }
+
         public async Task<bool> ConnectAsync(string connectionId, MqttClientOptions options)
         {
             if (string.IsNullOrEmpty(connectionId))
@@ -26,7 +31,6 @@ namespace AmazData.Module.Mqtt.Services
                 throw new ArgumentNullException(nameof(connectionId));
             }
 
-            // If a client with this ID already exists, disconnect and remove it first.
             if (_clients.ContainsKey(connectionId))
             {
                 await DisconnectAsync(connectionId);
@@ -37,17 +41,15 @@ namespace AmazData.Module.Mqtt.Services
             _statuses[connectionId] = ConnectionStatus.Connecting;
             _lastErrors.TryRemove(connectionId, out _);
 
-            mqttClient.ConnectedAsync += e =>
+            mqttClient.ConnectedAsync += async e =>
             {
                 _statuses[connectionId] = ConnectionStatus.Connected;
                 _logger.LogInformation("MQTT client '{ConnectionId}' connected.", connectionId);
-                return Task.CompletedTask;
+                await Task.CompletedTask;
             };
 
-            mqttClient.DisconnectedAsync += e =>
+            mqttClient.DisconnectedAsync += async e =>
             {
-                // If it was a clean disconnect, we just mark it as disconnected.
-                // Otherwise, we mark it as an error state.
                 if (e.Reason == MqttClientDisconnectReason.NormalDisconnection)
                 {
                     _statuses[connectionId] = ConnectionStatus.Disconnected;
@@ -56,11 +58,11 @@ namespace AmazData.Module.Mqtt.Services
                 else
                 {
                     _statuses[connectionId] = ConnectionStatus.Error;
-                    var errorMessage = e.Exception?.Message ?? "Unknown disconnection reason";
+                    var errorMessage = e.Exception?.Message ?? e.ReasonString;
                     _lastErrors[connectionId] = errorMessage;
                     _logger.LogWarning(e.Exception, "MQTT client '{ConnectionId}' disconnected with error: {Error}", connectionId, errorMessage);
                 }
-                return Task.CompletedTask;
+                await Task.CompletedTask;
             };
 
             try
@@ -78,7 +80,6 @@ namespace AmazData.Module.Mqtt.Services
                     _logger.LogError(errorMessage);
                     _statuses[connectionId] = ConnectionStatus.Error;
                     _lastErrors[connectionId] = errorMessage;
-                    // Clean up the failed client
                     _clients.TryRemove(connectionId, out _);
                     return false;
                 }
@@ -88,7 +89,6 @@ namespace AmazData.Module.Mqtt.Services
                 _logger.LogError(ex, "Exception during connection for MQTT client '{ConnectionId}'.", connectionId);
                 _statuses[connectionId] = ConnectionStatus.Error;
                 _lastErrors[connectionId] = ex.Message;
-                // Clean up the failed client
                 _clients.TryRemove(connectionId, out _);
                 return false;
             }
@@ -102,7 +102,7 @@ namespace AmazData.Module.Mqtt.Services
                 {
                     try
                     {
-                        await client.DisconnectAsync(new MqttClientDisconnectOptions { Reason = MqttClientDisconnectOptionsReason.NormalDisconnection }, CancellationToken.None);
+                        await client.DisconnectAsync(MqttClientDisconnectOptionsReason.ImplementationSpecificError);
                     }
                     catch (Exception ex)
                     {
@@ -131,7 +131,7 @@ namespace AmazData.Module.Mqtt.Services
             var connectionIds = _clients.Keys.ToList();
             foreach (var connectionId in connectionIds)
             {
-                DisconnectAsync(connectionId).Wait();
+                DisconnectAsync(connectionId).GetAwaiter().GetResult();
             }
             _clients.Clear();
             _statuses.Clear();

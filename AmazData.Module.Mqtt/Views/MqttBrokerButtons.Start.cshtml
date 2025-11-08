@@ -1,0 +1,12 @@
+﻿@using OrchardCore.ContentManagement
+@model AmazData.Module.Mqtt.Models.MqttBrokerButtonsViewModel
+@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@{
+    if (Model.ContentItem == null)
+    {
+        return;
+    }
+}
+<a href="/AmazData.Module.Mqtt/Home/Index?brokerId=@Model.ContentItem.ContentItemId" class="btn btn-sm btn-secondary">连接</a>

@@ -15,5 +15,6 @@ namespace AmazData.Module.Mqtt.Services
         Task<bool> ConnectAsync(string connectionId, MqttClientOptions options);
         Task DisconnectAsync(string connectionId);
         Task<(ConnectionStatus Status, string? LastError)> GetConnectionStatusAsync(string connectionId);
+        Task<IMqttClient?> GetClientAsync(string connectionId);
     }
 }

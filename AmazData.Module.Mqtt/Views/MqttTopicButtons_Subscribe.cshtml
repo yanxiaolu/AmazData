@@ -1,0 +1,9 @@
+@using OrchardCore.ContentManagement
+@model AmazData.Module.Mqtt.Models.MqttBrokerButtonsViewModel
+@{
+    if (Model.ContentItem == null)
+    {
+        return;
+    }
+}
+<a href="/AmazData.Module.Mqtt/Subscription/Subscribe?topicId=@Model.ContentItem.ContentItemId" class="btn btn-sm btn-primary">订阅</a>

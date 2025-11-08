@@ -1,0 +1,10 @@
+@using OrchardCore.ContentManagement
+@model ContentItem
+
+<h1>Broker Details</h1>
+
+<p><strong>Content Item ID:</strong> @Model.ContentItemId</p>
+<p><strong>Broker Address:</strong> @Model.Content.BrokerPart.BrokerAddress</p>
+<p><strong>Broker Port:</strong> @Model.Content.BrokerPart.BrokerPort</p>
+
+<a asp-action="Index" asp-controller="Home" asp-area="OrchardCore.Contents" asp-route-id="@Model.ContentItemId" class="btn btn-primary">Back to List (placeholder)</a>
