@@ -73,15 +73,7 @@ namespace AmazData.Module.Mqtt.Services
 
 
             var topicPattern = topicPart.TopicPattern.Text;
-            // await client.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic(topicPattern).WithQualityOfServiceLevel(qosLevel).Build());
-            await client.SubscribeAsync(topicPattern);
-            client.ApplicationMessageReceivedAsync += e =>
-           {
-               var payload = e.ApplicationMessage?.Payload == null ? string.Empty : Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
-               _logger.LogInformation("MQTT Message Received on topic {Topic}: {Payload}", e.ApplicationMessage.Topic, payload.Replace("\n", "").Replace("\r", ""));
-               return Task.CompletedTask;
-           };
-            _logger.LogInformation("Client for broker '{BrokerId}' subscribed to topic '{TopicPattern}' with QoS {QoS}.", brokerId, topicPattern, qosLevel);
+            _logger.LogInformation("Topic '{TopicPattern}' for broker '{BrokerId}' is configured for subscription.", topicPattern, brokerId);
         }
 
         public Task UnsubscribeAsync(string topicItemId)
