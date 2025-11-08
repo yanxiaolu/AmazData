@@ -1,5 +1,4 @@
 using OrchardCore.Logging;
-using AmazData.Module.Mqtt.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,7 +6,6 @@ builder.Host.UseNLogHost();
 
 builder.Services
     .AddOrchardCms()
-    .AddHostedService<MqttBackgroundService>()
     // // Orchard Specific Pipeline
     // .ConfigureServices( services => {
     // })

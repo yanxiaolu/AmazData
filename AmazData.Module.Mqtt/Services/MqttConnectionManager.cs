@@ -10,6 +10,7 @@ namespace AmazData.Module.Mqtt.Services
         private readonly ConcurrentDictionary<string, IMqttClient> _clients = new();
         private readonly ConcurrentDictionary<string, ConnectionStatus> _statuses = new();
         private readonly ConcurrentDictionary<string, string?> _lastErrors = new();
+        private readonly ConcurrentDictionary<string, ConcurrentBag<string>> _clientSubscribedTopics = new(); // BrokerId -> List of TopicPatterns
         private readonly MqttClientFactory _mqttClientFactory;
 
         public MqttConnectionManager(ILogger<MqttConnectionManager> logger)
@@ -22,6 +23,44 @@ namespace AmazData.Module.Mqtt.Services
         {
             _clients.TryGetValue(connectionId, out var client);
             return Task.FromResult(client);
+        }
+
+        public async Task UpdateSubscriptionsAsync(string brokerId, IEnumerable<MqttTopicFilter> topicFilters)
+        {
+            if (!_clients.TryGetValue(brokerId, out var client) || !client.IsConnected)
+            {
+                _logger.LogWarning("Cannot update subscriptions for broker '{BrokerId}'. Client is not connected.", brokerId);
+                return;
+            }
+
+            var currentSubscribedTopics = _clientSubscribedTopics.GetOrAdd(brokerId, new ConcurrentBag<string>());
+            var newTopicPatterns = topicFilters.Select(f => f.Topic).ToList();
+
+            // Topics to unsubscribe
+            var topicsToUnsubscribe = currentSubscribedTopics.Except(newTopicPatterns).ToList();
+            if (topicsToUnsubscribe.Any())
+            {
+                await client.UnsubscribeAsync(topicsToUnsubscribe.Select(t => new MqttTopicFilter { Topic = t }).ToList());
+                _logger.LogInformation("Unsubscribed from topics for broker '{BrokerId}': {Topics}", brokerId, string.Join(", ", topicsToUnsubscribe));
+                foreach (var topic in topicsToUnsubscribe)
+                {
+                    currentSubscribedTopics = new ConcurrentBag<string>(currentSubscribedTopics.Except(new[] { topic }));
+                }
+                _clientSubscribedTopics[brokerId] = currentSubscribedTopics;
+            }
+
+            // Topics to subscribe
+            var topicsToSubscribe = topicFilters.Where(f => !currentSubscribedTopics.Contains(f.Topic)).ToList();
+            if (topicsToSubscribe.Any())
+            {
+                await client.SubscribeAsync(new MqttClientSubscribeOptions { TopicFilters = topicsToSubscribe });
+                _logger.LogInformation("Subscribed to topics for broker '{BrokerId}': {Topics}", brokerId, string.Join(", ", topicsToSubscribe.Select(t => t.Topic)));
+                foreach (var topicFilter in topicsToSubscribe)
+                {
+                    currentSubscribedTopics.Add(topicFilter.Topic);
+                }
+                _clientSubscribedTopics[brokerId] = currentSubscribedTopics;
+            }
         }
 
         public async Task<bool> ConnectAsync(string connectionId, MqttClientOptions options)
@@ -45,6 +84,16 @@ namespace AmazData.Module.Mqtt.Services
             {
                 _statuses[connectionId] = ConnectionStatus.Connected;
                 _logger.LogInformation("MQTT client '{ConnectionId}' connected.", connectionId);
+
+                // Attach message received handler here
+                mqttClient.ApplicationMessageReceivedAsync += async messageEvent =>
+                {
+                    var payload = messageEvent.ApplicationMessage?.Payload == null ? string.Empty : Encoding.UTF8.GetString(messageEvent.ApplicationMessage.Payload);
+                    _logger.LogInformation("MQTT Message Received on topic {Topic} for broker {BrokerId}: {Payload}", messageEvent.ApplicationMessage.Topic, connectionId, payload.Replace("\n", "").Replace("\r", ""));
+                    // TODO: Process the received message (e.g., save to database, trigger events)
+                    await Task.CompletedTask;
+                };
+
                 await Task.CompletedTask;
             };
 
