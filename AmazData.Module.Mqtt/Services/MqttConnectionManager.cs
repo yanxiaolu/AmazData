@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using MQTTnet;
+using MQTTnet.Client.Options;
 using System.Collections.Concurrent;
+using System.Text;
 
 namespace AmazData.Module.Mqtt.Services
 {
@@ -23,44 +25,6 @@ namespace AmazData.Module.Mqtt.Services
         {
             _clients.TryGetValue(connectionId, out var client);
             return Task.FromResult(client);
-        }
-
-        public async Task UpdateSubscriptionsAsync(string brokerId, IEnumerable<MqttTopicFilter> topicFilters)
-        {
-            if (!_clients.TryGetValue(brokerId, out var client) || !client.IsConnected)
-            {
-                _logger.LogWarning("Cannot update subscriptions for broker '{BrokerId}'. Client is not connected.", brokerId);
-                return;
-            }
-
-            var currentSubscribedTopics = _clientSubscribedTopics.GetOrAdd(brokerId, new ConcurrentBag<string>());
-            var newTopicPatterns = topicFilters.Select(f => f.Topic).ToList();
-
-            // Topics to unsubscribe
-            var topicsToUnsubscribe = currentSubscribedTopics.Except(newTopicPatterns).ToList();
-            if (topicsToUnsubscribe.Any())
-            {
-                await client.UnsubscribeAsync(topicsToUnsubscribe.Select(t => new MqttTopicFilter { Topic = t }).ToList());
-                _logger.LogInformation("Unsubscribed from topics for broker '{BrokerId}': {Topics}", brokerId, string.Join(", ", topicsToUnsubscribe));
-                foreach (var topic in topicsToUnsubscribe)
-                {
-                    currentSubscribedTopics = new ConcurrentBag<string>(currentSubscribedTopics.Except(new[] { topic }));
-                }
-                _clientSubscribedTopics[brokerId] = currentSubscribedTopics;
-            }
-
-            // Topics to subscribe
-            var topicsToSubscribe = topicFilters.Where(f => !currentSubscribedTopics.Contains(f.Topic)).ToList();
-            if (topicsToSubscribe.Any())
-            {
-                await client.SubscribeAsync(new MqttClientSubscribeOptions { TopicFilters = topicsToSubscribe });
-                _logger.LogInformation("Subscribed to topics for broker '{BrokerId}': {Topics}", brokerId, string.Join(", ", topicsToSubscribe.Select(t => t.Topic)));
-                foreach (var topicFilter in topicsToSubscribe)
-                {
-                    currentSubscribedTopics.Add(topicFilter.Topic);
-                }
-                _clientSubscribedTopics[brokerId] = currentSubscribedTopics;
-            }
         }
 
         public async Task<bool> ConnectAsync(string connectionId, MqttClientOptions options)

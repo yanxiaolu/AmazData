@@ -1,4 +1,5 @@
 using MQTTnet;
+using MQTTnet.Client.Options;
 
 namespace AmazData.Module.Mqtt.Services
 {
@@ -16,6 +17,5 @@ namespace AmazData.Module.Mqtt.Services
         Task DisconnectAsync(string connectionId);
         Task<(ConnectionStatus Status, string? LastError)> GetConnectionStatusAsync(string connectionId);
         Task<IMqttClient?> GetClientAsync(string connectionId);
-        Task UpdateSubscriptionsAsync(string brokerId, IEnumerable<MqttTopicFilter> topicFilters);
     }
 }
