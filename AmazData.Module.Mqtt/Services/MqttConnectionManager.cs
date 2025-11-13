@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Logging;
 using MQTTnet;
-using MQTTnet.Client.Options;
 using System.Collections.Concurrent;
 using System.Text;
 
@@ -50,15 +49,13 @@ namespace AmazData.Module.Mqtt.Services
                 _logger.LogInformation("MQTT client '{ConnectionId}' connected.", connectionId);
 
                 // Attach message received handler here
-                mqttClient.ApplicationMessageReceivedAsync += async messageEvent =>
+                mqttClient.ApplicationMessageReceivedAsync += e =>
                 {
-                    var payload = messageEvent.ApplicationMessage?.Payload == null ? string.Empty : Encoding.UTF8.GetString(messageEvent.ApplicationMessage.Payload);
-                    _logger.LogInformation("MQTT Message Received on topic {Topic} for broker {BrokerId}: {Payload}", messageEvent.ApplicationMessage.Topic, connectionId, payload.Replace("\n", "").Replace("\r", ""));
-                    // TODO: Process the received message (e.g., save to database, trigger events)
-                    await Task.CompletedTask;
+                    Console.WriteLine("Received application message.");
+
+                    return Task.CompletedTask;
                 };
 
-                await Task.CompletedTask;
             };
 
             mqttClient.DisconnectedAsync += async e =>

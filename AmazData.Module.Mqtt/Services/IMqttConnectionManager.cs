@@ -1,5 +1,4 @@
 using MQTTnet;
-using MQTTnet.Client.Options;
 
 namespace AmazData.Module.Mqtt.Services
 {
