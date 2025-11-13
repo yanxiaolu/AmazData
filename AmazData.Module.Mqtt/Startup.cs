@@ -6,6 +6,7 @@ using AmazData.Module.Mqtt.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using OrchardCore.BackgroundTasks;
 using OrchardCore.ContentManagement;
 using OrchardCore.ContentManagement.Display.ContentDisplay;
 using OrchardCore.Data.Migration;
@@ -19,6 +20,8 @@ public sealed class Startup : StartupBase
 {
     public override void ConfigureServices(IServiceCollection services)
     {
+
+
         services.AddScoped<IMqttOptionsBuilderService, MqttOptionsBuilderService>();
         services.AddScoped<IMqttSubscriptionManager, MqttSubscriptionManager>();
         services.AddSingleton<IMqttConnectionManager, MqttConnectionManager>();
@@ -30,8 +33,8 @@ public sealed class Startup : StartupBase
         // 注册 Content Display Driver 以添加按钮
         services.AddScoped<IContentDisplayDriver, MqttBrokerButtonsDisplayDriver>();
         services.AddScoped<IContentDisplayDriver, MqttTopicButtonsDisplayDriver>();
-
-        services.AddHostedService<MqttHostedService>();
+        // 注册后台任务
+        services.AddScoped<IBackgroundTask, MqttBackgroundTask>();
     }
 
     public override void Configure(IApplicationBuilder builder, IEndpointRouteBuilder routes, IServiceProvider serviceProvider)
