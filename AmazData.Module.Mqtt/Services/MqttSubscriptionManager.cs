@@ -25,55 +25,40 @@ namespace AmazData.Module.Mqtt.Services
 
         public async Task SubscribeAsync(string topicItemId)
         {
-            var topicContentItem = await _contentManager.GetAsync(topicItemId);
-            var topicPart = topicContentItem?.As<TopicPart>();
-            if (topicPart == null)
+            // 根据你依赖的版本，这里使用 MqttFactory 更常见、兼容性好
+            var factory = new MqttClientFactory();
+            var mqttClient = factory.CreateMqttClient();
+
+            // 消息到达时的处理器
+            mqttClient.ApplicationMessageReceivedAsync += e =>
             {
-                _logger.LogWarning("Could not subscribe. Topic with ID '{TopicId}' not found.", topicItemId);
-                return;
-            }
+                var payload = e.ApplicationMessage?.Payload == null ? string.Empty : Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
+                // 移除 payload 中的换行符，确保单行输出
+                var sanitizedPayload = payload.Replace("\n", " ").Replace("\r", " ");
+                _logger.LogInformation($"[{DateTime.Now:O}] Topic: {e.ApplicationMessage?.Topic} QoS: {e.ApplicationMessage?.QualityOfServiceLevel} Payload: {sanitizedPayload} {new string('-', 60)}");
+                return Task.CompletedTask;
+            };
 
-            var brokerContentItemIds = topicPart.Broker.ContentItemIds;
-            if (brokerContentItemIds == null || brokerContentItemIds.Length == 0)
+            // 连接/重连成功后订阅（放在这里能在自动重连后再次订阅）
+            mqttClient.ConnectedAsync += async e =>
             {
-                _logger.LogWarning("Could not subscribe. Topic '{TopicId}' has no associated broker.", topicItemId);
-                return;
-            }
+                _logger.LogInformation("MQTT 已连接。订阅主题...");
+                await mqttClient.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic("system/MonitorData").WithAtLeastOnceQoS().Build());
+                _logger.LogInformation("订阅完成：system/MonitorData");
+            };
 
-            var brokerId = brokerContentItemIds[0];
-            var client = await _connectionManager.GetClientAsync(brokerId);
-
-            if (client == null || !client.IsConnected)
+            mqttClient.DisconnectedAsync += e =>
             {
-                _logger.LogWarning("Could not subscribe. MQTT client for broker '{BrokerId}' is not available or not connected.", brokerId);
-                return;
-            }
+                _logger.LogInformation($"MQTT 已断开（reason: {e.Reason}）。异常: {e.Exception?.Message}");
+                return Task.CompletedTask;
+            };
 
-            // Fetch the Broker content item to get QoS level
-            var brokerContentItem = await _contentManager.GetAsync(brokerId);
-            var brokerPart = brokerContentItem?.As<BrokerPart>();
-            if (brokerPart == null)
-            {
-                _logger.LogWarning("Could not subscribe. Broker with ID '{BrokerId}' not found or has no BrokerPart.", brokerId);
-                return;
-            }
+            var options = new MqttClientOptionsBuilder()
+                .WithTcpServer("8.152.96.245") // 替换为你的 broker
+                                               // 可选：.WithCleanSession(false) 来保持会话（有些 broker/用例）
+                .Build();
 
-            var qosText = brokerPart.Qos.Text; // Assuming Qos is a TextField
-            MqttQualityOfServiceLevel qosLevel = MqttQualityOfServiceLevel.AtLeastOnce; // Default to QoS 1
-
-            if (!string.IsNullOrEmpty(qosText) && int.TryParse(qosText, out int qosInt))
-            {
-                qosLevel = (MqttQualityOfServiceLevel)qosInt;
-            }
-            else
-            {
-                _logger.LogWarning("QoS level not configured or invalid for Broker '{BrokerId}'. Defaulting to QoS 0.", brokerId);
-            }
-
-
-
-            var topicPattern = topicPart.TopicPattern.Text;
-            _logger.LogInformation("Topic '{TopicPattern}' for broker '{BrokerId}' is configured for subscription.", topicPattern, brokerId);
+            await mqttClient.ConnectAsync(options, CancellationToken.None);
         }
 
         public Task UnsubscribeAsync(string topicItemId)
