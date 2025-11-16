@@ -54,7 +54,7 @@ namespace AmazData.Module.Mqtt.Controllers
                 return RedirectToAction("List", "Admin", new { area = "OrchardCore.Contents", contentTypeId = "Topic" });
             }
 
-            await _mqttSubscriptionManager.SubscribeAsync(topicId);
+            await _mqttSubscriptionManager.SubscribeAsync(brokerId, topicPart.TopicPattern.Text);
 
             await _notifier.SuccessAsync(_localizer["Topic subscribed successfully."]);
             return RedirectToAction("List", "Admin", new { area = "OrchardCore.Contents", contentTypeId = "Topic" });

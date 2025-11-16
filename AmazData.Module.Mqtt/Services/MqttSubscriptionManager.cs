@@ -23,42 +23,16 @@ namespace AmazData.Module.Mqtt.Services
             _logger = logger;
         }
 
-        public async Task SubscribeAsync(string topicItemId)
+        public async Task SubscribeAsync(string topicItemId, string topicToSubscribe)
         {
-            // 根据你依赖的版本，这里使用 MqttFactory 更常见、兼容性好
-            var factory = new MqttClientFactory();
-            var mqttClient = factory.CreateMqttClient();
+            var connectionId = topicItemId; // topicItemId 就是 connectionId
 
-            // 消息到达时的处理器
-            mqttClient.ApplicationMessageReceivedAsync += e =>
-            {
-                var payload = e.ApplicationMessage?.Payload == null ? string.Empty : Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
-                // 移除 payload 中的换行符，确保单行输出
-                var sanitizedPayload = payload.Replace("\n", " ").Replace("\r", " ");
-                _logger.LogInformation($"[{DateTime.Now:O}] Topic: {e.ApplicationMessage?.Topic} QoS: {e.ApplicationMessage?.QualityOfServiceLevel} Payload: {sanitizedPayload} {new string('-', 60)}");
-                return Task.CompletedTask;
-            };
+            _logger.LogInformation("Requesting subscription to '{Topic}' for connection '{ConnectionId}'.", topicToSubscribe, connectionId);
 
-            // 连接/重连成功后订阅（放在这里能在自动重连后再次订阅）
-            mqttClient.ConnectedAsync += async e =>
-            {
-                _logger.LogInformation("MQTT 已连接。订阅主题...");
-                await mqttClient.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic("system/MonitorData").WithAtLeastOnceQoS().Build());
-                _logger.LogInformation("订阅完成：system/MonitorData");
-            };
+            // 将所有复杂逻辑委托给 ConnectionManager
+            await _connectionManager.AddSubscriptionAsync(connectionId, topicToSubscribe);
 
-            mqttClient.DisconnectedAsync += e =>
-            {
-                _logger.LogInformation($"MQTT 已断开（reason: {e.Reason}）。异常: {e.Exception?.Message}");
-                return Task.CompletedTask;
-            };
-
-            var options = new MqttClientOptionsBuilder()
-                .WithTcpServer("8.152.96.245") // 替换为你的 broker
-                                               // 可选：.WithCleanSession(false) 来保持会话（有些 broker/用例）
-                .Build();
-
-            await mqttClient.ConnectAsync(options, CancellationToken.None);
+            _logger.LogInformation("Subscription request for '{Topic}' completed for connection '{ConnectionId}'.", topicToSubscribe, connectionId);
         }
 
         public Task UnsubscribeAsync(string topicItemId)
