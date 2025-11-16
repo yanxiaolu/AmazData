@@ -1,24 +1,16 @@
-using System.Text;
-using AmazData.Module.Mqtt.Models;
 using Microsoft.Extensions.Logging;
-using MQTTnet;
-using MQTTnet.Protocol;
 using OrchardCore.ContentManagement;
 
 namespace AmazData.Module.Mqtt.Services
 {
     public class MqttSubscriptionManager : IMqttSubscriptionManager
     {
-        private readonly IContentManager _contentManager;
+
         private readonly IMqttConnectionManager _connectionManager;
         private readonly ILogger<MqttSubscriptionManager> _logger;
 
-        public MqttSubscriptionManager(
-            IContentManager contentManager,
-            IMqttConnectionManager connectionManager,
-            ILogger<MqttSubscriptionManager> logger)
+        public MqttSubscriptionManager(IMqttConnectionManager connectionManager, ILogger<MqttSubscriptionManager> logger)
         {
-            _contentManager = contentManager;
             _connectionManager = connectionManager;
             _logger = logger;
         }
