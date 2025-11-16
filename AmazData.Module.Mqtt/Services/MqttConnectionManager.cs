@@ -1,5 +1,8 @@
+using AmazData.Module.Mqtt.Models;
 using Microsoft.Extensions.Logging;
 using MQTTnet;
+using OrchardCore.ContentFields.Fields;
+using OrchardCore.ContentManagement;
 using System.Collections.Concurrent;
 using System.Text;
 
@@ -14,9 +17,11 @@ namespace AmazData.Module.Mqtt.Services
         // 这个字段是关键，用来持久化记录每个连接需要订阅的主题
         private readonly ConcurrentDictionary<string, ConcurrentBag<string>> _clientSubscribedTopics = new();
         private readonly MqttClientFactory _mqttClientFactory; // 使用 MqttFactory
+        private readonly IContentManager _contentManager;
 
-        public MqttConnectionManager(ILogger<MqttConnectionManager> logger)
+        public MqttConnectionManager(IContentManager contentManager, ILogger<MqttConnectionManager> logger)
         {
+            _contentManager = contentManager;
             _logger = logger;
             _mqttClientFactory = new MqttClientFactory(); // 使用 MqttFactory
         }
@@ -64,7 +69,7 @@ namespace AmazData.Module.Mqtt.Services
             };
 
             // ✅ **修改点 2: 在 ApplicationMessageReceivedAsync 中添加详细日志**
-            mqttClient.ApplicationMessageReceivedAsync += e =>
+            mqttClient.ApplicationMessageReceivedAsync += async e =>
             {
                 var payload = e.ApplicationMessage.Payload.ToString() == null ? string.Empty : Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
                 var sanitizedPayload = payload.Replace("\n", " ").Replace("\r", " ");
@@ -75,12 +80,22 @@ namespace AmazData.Module.Mqtt.Services
                     e.ApplicationMessage?.QualityOfServiceLevel,
                     sanitizedPayload);
 
-                return Task.CompletedTask;
+                // Create a new scope to resolve scoped services
+                var contentItem = await _contentManager.NewAsync("DataRecord");
+
+                contentItem.Alter<DataRecordPart>(part =>
+                {
+                    part.Timestamp = new DateTimeField { Value = DateTime.UtcNow };
+                    part.JsonDocument = new TextField { Text = sanitizedPayload };
+                });
+
+                await _contentManager.PublishAsync(contentItem);
+
+                _logger.LogInformation("Created MqttDataRecord content item for message from topic {Topic}", e.ApplicationMessage.Topic);
             };
 
             mqttClient.DisconnectedAsync += async e =>
             {
-                // ... (这部分逻辑不变)
                 if (e.Reason == MqttClientDisconnectReason.NormalDisconnection)
                 {
                     _statuses[connectionId] = ConnectionStatus.Disconnected;
