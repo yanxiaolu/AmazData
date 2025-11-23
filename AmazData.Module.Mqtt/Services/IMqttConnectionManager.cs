@@ -1,21 +1,14 @@
-using MQTTnet;
+using AmazData.Module.Mqtt.Models;
 
-namespace AmazData.Module.Mqtt.Services
+namespace AmazData.Module.Mqtt.Services;
+
+public interface IMqttConnectionManager
 {
-    public enum ConnectionStatus
-    {
-        Disconnected,
-        Connecting,
-        Connected,
-        Error
-    }
+    Task<bool> ConnectAsync(BrokerConfig config);
+    Task DisconnectAsync(string key);
+    Task SubscribeAsync(string key, string topic);
+    Task PublishAsync(string key, string topic, string payload);
 
-    public interface IMqttConnectionManager
-    {
-        Task<bool> ConnectAsync(string connectionId, MqttClientOptions options);
-        Task DisconnectAsync(string connectionId);
-        Task<(ConnectionStatus Status, string? LastError)> GetConnectionStatusAsync(string connectionId);
-        Task<IMqttClient?> GetClientAsync(string connectionId);
-        Task AddSubscriptionAsync(string connectionId, string topic);
-    }
+    // 统一的消息事件
+    event EventHandler<BrokerMessageEventArgs> OnMessageReceived;
 }
