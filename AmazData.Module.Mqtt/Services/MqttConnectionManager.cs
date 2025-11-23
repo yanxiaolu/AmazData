@@ -1,208 +1,168 @@
 using AmazData.Module.Mqtt.Models;
 using Microsoft.Extensions.Logging;
 using MQTTnet;
-using OrchardCore.ContentFields.Fields;
-using OrchardCore.ContentManagement;
+using MQTTnet.Protocol;
 using System.Collections.Concurrent;
 using System.Text;
 
-namespace AmazData.Module.Mqtt.Services
+namespace AmazData.Module.Mqtt.Services;
+
+public class MqttConnectionManager : IMqttConnectionManager, IDisposable
 {
-    public class MqttConnectionManager : IMqttConnectionManager, IDisposable
+    // 线程安全的字典，存储 {Key : Client}
+    private readonly ConcurrentDictionary<string, IMqttClient> _clients = new();
+    private readonly MqttClientFactory _clientFactory; // v5.0 核心工厂
+    private readonly ILogger<MqttConnectionManager> _logger;
+
+    public event EventHandler<BrokerMessageEventArgs>? OnMessageReceived;
+
+    public MqttConnectionManager(ILogger<MqttConnectionManager> logger)
     {
-        private readonly ILogger<MqttConnectionManager> _logger;
-        private readonly ConcurrentDictionary<string, IMqttClient> _clients = new();
-        private readonly ConcurrentDictionary<string, ConnectionStatus> _statuses = new();
-        private readonly ConcurrentDictionary<string, string?> _lastErrors = new();
-        // 这个字段是关键，用来持久化记录每个连接需要订阅的主题
-        private readonly ConcurrentDictionary<string, ConcurrentBag<string>> _clientSubscribedTopics = new();
-        private readonly MqttClientFactory _mqttClientFactory; // 使用 MqttFactory
-        private readonly IContentManager _contentManager;
+        _logger = logger;
+        // [符合官方示例] 实例化 MqttClientFactory
+        _clientFactory = new MqttClientFactory();
+    }
 
-        public MqttConnectionManager(IContentManager contentManager, ILogger<MqttConnectionManager> logger)
+    public async Task<bool> ConnectAsync(BrokerConfig config)
+    {
+        // 如果已存在且已连接，直接返回
+        if (_clients.TryGetValue(config.Key, out var existingClient) && existingClient.IsConnected)
         {
-            _contentManager = contentManager;
-            _logger = logger;
-            _mqttClientFactory = new MqttClientFactory(); // 使用 MqttFactory
+            _logger.LogWarning($"Broker [{config.Key}] 已经是连接状态。");
+            return true;
         }
 
-        public Task<IMqttClient?> GetClientAsync(string connectionId)
+        // 1. 创建客户端 (使用 MqttClientFactory)
+        var client = _clientFactory.CreateMqttClient();
+
+        // 2. 构建连接选项 (使用 MqttClientOptionsBuilder)
+        var optionsBuilder = new MqttClientOptionsBuilder()
+            .WithTcpServer(config.Host, config.Port)
+            .WithClientId(string.IsNullOrEmpty(config.ClientId) ? Guid.NewGuid().ToString() : config.ClientId)
+            // v5.0 建议使用 CleanSession (对于 MQTT 3.x) 或 CleanStart (对于 MQTT 5.0)
+            .WithCleanSession()
+            .WithTimeout(TimeSpan.FromSeconds(10));
+
+        if (!string.IsNullOrEmpty(config.Username))
         {
-            _clients.TryGetValue(connectionId, out var client);
-            return Task.FromResult(client);
+            optionsBuilder.WithCredentials(config.Username, config.Password);
         }
 
-        public async Task<bool> ConnectAsync(string connectionId, MqttClientOptions options)
+        var options = optionsBuilder.Build();
+
+        // 3. 挂载消息接收事件
+        client.ApplicationMessageReceivedAsync += async e =>
         {
-            if (string.IsNullOrEmpty(connectionId))
+            // 获取 Payload
+            // 注意：v5 中 Payload 是 ReadOnlyMemory<byte>
+            // 直接使用 ConvertPayloadToString()，它会自动处理 Payload 为 null 的情况
+            var payloadStr = e.ApplicationMessage.ConvertPayloadToString();
+            // 触发外部事件
+            OnMessageReceived?.Invoke(this, new BrokerMessageEventArgs(config.Key, e.ApplicationMessage.Topic, payloadStr));
+
+            await Task.CompletedTask;
+        };
+
+        try
+        {
+            _logger.LogInformation($"[{config.Key}] 正在连接...");
+            // 4. 执行连接
+            var result = await client.ConnectAsync(options);
+
+            if (result.ResultCode == MqttClientConnectResultCode.Success)
             {
-                throw new ArgumentNullException(nameof(connectionId));
-            }
-
-            if (_clients.ContainsKey(connectionId))
-            {
-                await DisconnectAsync(connectionId);
-            }
-
-            var mqttClient = _mqttClientFactory.CreateMqttClient();
-            _clients[connectionId] = mqttClient;
-            _statuses[connectionId] = ConnectionStatus.Connecting;
-            _lastErrors.TryRemove(connectionId, out _);
-            // 确保为新的连接初始化一个空的订阅列表
-            _clientSubscribedTopics.TryAdd(connectionId, new ConcurrentBag<string>());
-
-            // ✅ **修改点 1: 在 ConnectedAsync 中恢复订阅**
-            mqttClient.ConnectedAsync += async e =>
-            {
-                _statuses[connectionId] = ConnectionStatus.Connected;
-                _logger.LogInformation("MQTT client '{ConnectionId}' connected. Restoring subscriptions...", connectionId);
-
-                if (_clientSubscribedTopics.TryGetValue(connectionId, out var topicsToSubscribe) && !topicsToSubscribe.IsEmpty)
+                // 更新字典
+                _clients.AddOrUpdate(config.Key, client, (k, old) =>
                 {
-                    var topicFilters = topicsToSubscribe.Select(topic => new MqttTopicFilterBuilder().WithTopic(topic).Build()).ToList();
-                    if (topicFilters.Any())
-                    {
-                        await mqttClient.SubscribeAsync(new MqttClientSubscribeOptions { TopicFilters = topicFilters });
-                        _logger.LogInformation("Restored {Count} subscriptions for '{ConnectionId}'.", topicFilters.Count, connectionId);
-                    }
-                }
-            };
-
-            // ✅ **修改点 2: 在 ApplicationMessageReceivedAsync 中添加详细日志**
-            mqttClient.ApplicationMessageReceivedAsync += async e =>
-            {
-                var payload = e.ApplicationMessage.Payload.ToString() == null ? string.Empty : Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
-                var sanitizedPayload = payload.Replace("\n", " ").Replace("\r", " ");
-                _logger.LogInformation(
-                    "Message Received on client '{ConnectionId}': [Topic: {Topic}] [QoS: {QoS}] [Payload: {Payload}]",
-                    connectionId,
-                    e.ApplicationMessage?.Topic,
-                    e.ApplicationMessage?.QualityOfServiceLevel,
-                    sanitizedPayload);
-
-                // Create a new scope to resolve scoped services
-                var contentItem = await _contentManager.NewAsync("DataRecord");
-
-                contentItem.Alter<DataRecordPart>(part =>
-                {
-                    part.Timestamp = new DateTimeField { Value = DateTime.UtcNow };
-                    part.JsonDocument = new TextField { Text = sanitizedPayload };
+                    old.Dispose(); // 如果有旧的，先销毁
+                    return client;
                 });
-
-                await _contentManager.PublishAsync(contentItem);
-
-                _logger.LogInformation("Created MqttDataRecord content item for message from topic {Topic}", e.ApplicationMessage.Topic);
-            };
-
-            mqttClient.DisconnectedAsync += async e =>
-            {
-                if (e.Reason == MqttClientDisconnectReason.NormalDisconnection)
-                {
-                    _statuses[connectionId] = ConnectionStatus.Disconnected;
-                    _logger.LogInformation("MQTT client '{ConnectionId}' disconnected cleanly.", connectionId);
-                }
-                else
-                {
-                    _statuses[connectionId] = ConnectionStatus.Error;
-                    var errorMessage = e.Exception?.Message ?? e.ReasonString;
-                    _lastErrors[connectionId] = errorMessage;
-                    _logger.LogWarning(e.Exception, "MQTT client '{ConnectionId}' disconnected with error: {Error}", connectionId, errorMessage);
-                }
-                await Task.CompletedTask;
-            };
-
-            try
-            {
-                // ... (ConnectAsync 的调用和后续逻辑不变)
-                var connectResult = await mqttClient.ConnectAsync(options, CancellationToken.None);
-                if (connectResult.ResultCode == MqttClientConnectResultCode.Success)
-                {
-                    _logger.LogInformation("Successfully initiated connection for MQTT client '{ConnectionId}'.", connectionId);
-                    return true;
-                }
-                else
-                {
-                    var errorMessage = $"Failed to connect MQTT client '{connectionId}': {connectResult.ReasonString}";
-                    _logger.LogError(errorMessage);
-                    _statuses[connectionId] = ConnectionStatus.Error;
-                    _lastErrors[connectionId] = errorMessage;
-                    _clients.TryRemove(connectionId, out _);
-                    return false;
-                }
+                _logger.LogInformation($"[{config.Key}] 连接成功!");
+                return true;
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogError(ex, "Exception during connection for MQTT client '{ConnectionId}'.", connectionId);
-                _statuses[connectionId] = ConnectionStatus.Error;
-                _lastErrors[connectionId] = ex.Message;
-                _clients.TryRemove(connectionId, out _);
+                _logger.LogError($"[{config.Key}] 连接失败: {result.ResultCode} - {result.ReasonString}");
                 return false;
             }
         }
-
-        // ✅ **修改点 3: 新增 AddSubscriptionAsync 方法**
-        public async Task AddSubscriptionAsync(string connectionId, string topic)
+        catch (Exception ex)
         {
-            if (!_clientSubscribedTopics.TryGetValue(connectionId, out var topics))
-            {
-                _logger.LogWarning("Attempted to add subscription to non-existent connection '{ConnectionId}'.", connectionId);
-                return;
-            }
-
-            if (!topics.Contains(topic))
-            {
-                topics.Add(topic);
-            }
-
-            if (_clients.TryGetValue(connectionId, out var client) && client.IsConnected)
-            {
-                _logger.LogInformation("Dynamically subscribing client '{ConnectionId}' to topic '{Topic}'.", connectionId, topic);
-                await client.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic(topic).Build());
-            }
+            _logger.LogError(ex, $"[{config.Key}] 连接异常");
+            return false;
         }
+    }
 
-        public async Task DisconnectAsync(string connectionId)
+    public async Task SubscribeAsync(string key, string topic)
+    {
+        var client = GetClient(key);
+
+        // [符合官方示例 Client_Subscribe_Samples.cs]
+        // v5.0 必须构建 MqttClientSubscribeOptions
+        var subscribeOptions = new MqttClientSubscribeOptionsBuilder()
+            .WithTopicFilter(f =>
+            {
+                f.WithTopic(topic);
+                f.WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce);
+            })
+            .Build();
+
+        // 调用 SubscribeAsync 传入 Options
+        var result = await client.SubscribeAsync(subscribeOptions);
+
+        // 可以在这里检查 result.Items 来确认每个 topic 的订阅结果
+        _logger.LogInformation($"[{key}] 已订阅主题: {topic}");
+    }
+
+    public async Task PublishAsync(string key, string topic, string payload)
+    {
+        var client = GetClient(key);
+
+        // 构建消息
+        var message = new MqttApplicationMessageBuilder()
+            .WithTopic(topic)
+            .WithPayload(payload)
+            .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
+            .Build();
+
+        await client.PublishAsync(message);
+        _logger.LogDebug($"[{key}] 消息已发送 -> {topic}");
+    }
+
+    public async Task DisconnectAsync(string key)
+    {
+        if (_clients.TryRemove(key, out var client))
         {
-            if (_clients.TryRemove(connectionId, out var client))
+            if (client.IsConnected)
             {
-                if (client.IsConnected)
-                {
-                    try
-                    {
-                        await client.DisconnectAsync(MqttClientDisconnectOptionsReason.NormalDisconnection, "Normal disconnection");
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error while disconnecting MQTT client '{ConnectionId}'.", connectionId);
-                    }
-                }
-                client.Dispose();
-            }
-            _statuses.TryRemove(connectionId, out _);
-            _lastErrors.TryRemove(connectionId, out _);
-        }
+                // [符合官方示例 Client_Connection_Samples.cs]
+                // v5.0 必须构建 MqttClientDisconnectOptions
+                var disconnectOptions = new MqttClientDisconnectOptionsBuilder()
+                    .WithReason(MqttClientDisconnectOptionsReason.NormalDisconnection)
+                    .Build();
 
-        public Task<(ConnectionStatus Status, string? LastError)> GetConnectionStatusAsync(string connectionId)
+                await client.DisconnectAsync(disconnectOptions);
+            }
+            client.Dispose();
+            _logger.LogInformation($"[{key}] 已断开并清理资源");
+        }
+    }
+
+    private IMqttClient GetClient(string key)
+    {
+        if (_clients.TryGetValue(key, out var client) && client.IsConnected)
         {
-            if (!_statuses.TryGetValue(connectionId, out var status))
-            {
-                return Task.FromResult((ConnectionStatus.Disconnected, (string?)null));
-            }
-
-            _lastErrors.TryGetValue(connectionId, out var error);
-            return Task.FromResult((status, error));
+            return client;
         }
+        throw new InvalidOperationException($"客户端 [{key}] 未找到或未连接。请先调用 ConnectAsync。");
+    }
 
-        public void Dispose()
+    public void Dispose()
+    {
+        foreach (var client in _clients.Values)
         {
-            var connectionIds = _clients.Keys.ToList();
-            foreach (var connectionId in connectionIds)
-            {
-                DisconnectAsync(connectionId).GetAwaiter().GetResult();
-            }
-            _clients.Clear();
-            _statuses.Clear();
-            _lastErrors.Clear();
+            client.Dispose();
         }
+        _clients.Clear();
     }
 }
