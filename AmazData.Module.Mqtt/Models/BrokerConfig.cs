@@ -9,7 +9,9 @@ public record BrokerConfig(
     int Port = 1883,
     string ClientId = "",
     string? Username = null,
-    string? Password = null
+    string? Password = null,
+    string? Qos = null,
+    bool UseSSL = false
 );
 
 // 消息事件参数：包含来源 Broker 的 Key

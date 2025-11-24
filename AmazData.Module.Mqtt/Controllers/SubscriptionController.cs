@@ -12,32 +12,30 @@ namespace AmazData.Module.Mqtt.Controllers
     {
         private readonly IContentManager _contentManager;
         private readonly IMqttConnectionManager _mqttConnectionManager;
-        private readonly IMqttSubscriptionManager _mqttSubscriptionManager;
         private readonly INotifier _notifier;
         private readonly IHtmlLocalizer<SubscriptionController> _localizer;
 
         public SubscriptionController(
             IContentManager contentManager,
             IMqttConnectionManager mqttConnectionManager,
-            IMqttSubscriptionManager mqttSubscriptionManager,
             INotifier notifier,
             IHtmlLocalizer<SubscriptionController> localizer)
         {
             _contentManager = contentManager;
             _mqttConnectionManager = mqttConnectionManager;
-            _mqttSubscriptionManager = mqttSubscriptionManager;
             _notifier = notifier;
             _localizer = localizer;
         }
 
         public async Task<IActionResult> Subscribe(string topicId)
         {
-            var topicContentItem = await _contentManager.GetAsync(topicId);
-            var topicPart = topicContentItem?.As<TopicPart>();
-            if (topicPart == null)
+            var contentItem = await _contentManager.GetAsync(topicId);
+            if (contentItem is null)
             {
                 return NotFound("Topic not found.");
             }
+            var topicPart = contentItem?.As<TopicPart>();
+
 
             var brokerContentItemIds = topicPart.Broker.ContentItemIds;
             if (brokerContentItemIds == null || brokerContentItemIds.Length == 0)
@@ -46,15 +44,16 @@ namespace AmazData.Module.Mqtt.Controllers
             }
 
             var brokerId = brokerContentItemIds[0];
-            var (status, _) = await _mqttConnectionManager.GetConnectionStatusAsync(brokerId);
 
-            if (status != ConnectionStatus.Connected)
-            {
-                await _notifier.WarningAsync(_localizer["Broker is not connected. Please connect the broker first."]);
-                return RedirectToAction("List", "Admin", new { area = "OrchardCore.Contents", contentTypeId = "Topic" });
-            }
+            // var (status, _) = await _mqttConnectionManager.GetConnectionStatusAsync(brokerId);
 
-            await _mqttSubscriptionManager.SubscribeAsync(brokerId, topicPart.TopicPattern.Text);
+            // if (status != ConnectionStatus.Connected)
+            // {
+            //     await _notifier.WarningAsync(_localizer["Broker is not connected. Please connect the broker first."]);
+            //     return RedirectToAction("List", "Admin", new { area = "OrchardCore.Contents", contentTypeId = "Topic" });
+            // }
+
+            await _mqttConnectionManager.SubscribeAsync(brokerId, topicPart.TopicPattern.Text);
 
             await _notifier.SuccessAsync(_localizer["Topic subscribed successfully."]);
             return RedirectToAction("List", "Admin", new { area = "OrchardCore.Contents", contentTypeId = "Topic" });

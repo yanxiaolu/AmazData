@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using AmazData.Module.Mqtt.Services;
 using OrchardCore.DisplayManagement.Notify;
 using Microsoft.AspNetCore.Mvc.Localization;
+using AmazData.Module.Mqtt.Models;
 
 namespace AmazData.Module.Mqtt.Controllers
 {
@@ -13,13 +14,14 @@ namespace AmazData.Module.Mqtt.Controllers
         private readonly IMqttConnectionManager _mqttConnectionManager;
         private readonly IMqttOptionsBuilderService _mqttOptionsBuilderService;
         private readonly INotifier _notifier;
-        private readonly IHtmlLocalizer<SubscriptionController> _localizer;
+        private readonly IHtmlLocalizer<HomeController> _localizer;
         public HomeController(
             IContentManager contentManager,
             IMqttConnectionManager mqttConnectionManager,
             IMqttOptionsBuilderService mqttOptionsBuilderService,
             INotifier notifier,
-            IHtmlLocalizer<SubscriptionController> localizer)
+            IHtmlLocalizer<HomeController> localizer
+            )
         {
             _contentManager = contentManager;
             _mqttConnectionManager = mqttConnectionManager;
@@ -32,19 +34,29 @@ namespace AmazData.Module.Mqtt.Controllers
         {
             var contentItem = await _contentManager.GetAsync(brokerId);
 
-            if (contentItem == null)
+            if (contentItem is null)
             {
                 return NotFound();
             }
-
-            var options = await _mqttOptionsBuilderService.BuildOptionsAsync(brokerId);
-
-            if (options != null)
+            var brokerPart = contentItem.As<BrokerPart>();
+            if (brokerPart is not null)
             {
-                await _mqttConnectionManager.ConnectAsync(brokerId, options);
+                BrokerConfig brokerConfig = new BrokerConfig(
+                    Key: brokerId,
+                    Host: brokerPart.BrokerAddress.Text,
+                    Port: int.TryParse(brokerPart.Port.Text, out var port) ? port : 1883,
+                    ClientId: $"AmazData-{System.Environment.MachineName}-{brokerId}",
+                    Username: brokerPart.Username.Text,
+                    Password: brokerPart.Password.Text,
+                    UseSSL: brokerPart.UseSSL.Value
+                );
+                await _mqttConnectionManager.ConnectAsync(brokerConfig);
+                await _notifier.SuccessAsync(_localizer["Broker Connected successfully."]);
+                return RedirectToAction("List", "Admin", new { area = "OrchardCore.Contents", contentTypeId = "Broker" });
             }
-            await _notifier.SuccessAsync(_localizer["Broker Connected successfully."]);
-            return RedirectToAction("List", "Admin", new { area = "OrchardCore.Contents", contentTypeId = "Broker" });
+
+            return NotFound();
+
         }
     }
 }
