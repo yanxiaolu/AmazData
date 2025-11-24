@@ -59,7 +59,7 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
             var payloadStr = e.ApplicationMessage.ConvertPayloadToString();
             // 触发外部事件
             OnMessageReceived?.Invoke(this, new BrokerMessageEventArgs(config.Key, e.ApplicationMessage.Topic, payloadStr));
-
+            _logger.LogDebug($"[{config.Key}] 收到消息 -> 主题: {e.ApplicationMessage.Topic}, 内容: {payloadStr}");
             await Task.CompletedTask;
         };
 
