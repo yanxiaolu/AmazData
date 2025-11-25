@@ -23,6 +23,7 @@ public sealed class Startup : StartupBase
 
 
         services.AddScoped<IMqttOptionsBuilderService, MqttOptionsBuilderService>();
+        services.AddScoped<IBrokerService, BrokerService>();
         services.AddSingleton<IMqttConnectionManager, MqttConnectionManager>();
         services.AddDataMigration<MqttMigrations>();
         services.AddContentPart<BrokerPart>();
