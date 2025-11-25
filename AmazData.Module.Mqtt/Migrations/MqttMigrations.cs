@@ -1,4 +1,5 @@
 using System;
+using OrchardCore.ContentFields.Indexing.SQL;
 using OrchardCore.ContentFields.Settings;
 using OrchardCore.ContentManagement.Metadata;
 using OrchardCore.ContentManagement.Metadata.Settings;
@@ -56,7 +57,30 @@ public class MqttMigrations : DataMigration
                     Hint = "Enter the client identifier for the MQTT connection",
                     Required = true
                 }))
-            .WithField("ConnectionState", field => field.OfType("TextField"))
+            .WithField("ConnectionState", field => field
+                .OfType("MultiTextField"))
+                .WithDisplayName("ConnectionState")
+                .WithSettings(new MultiTextFieldSettings
+                {
+                    Hint = "Select the status of broker",
+                    Required = true,
+                    Options = new[]
+                    {
+                        new MultiTextFieldValueOption
+                        {
+                            Name = "Connected",
+                            Value = "0",
+                            Default = true
+                        },
+                        new MultiTextFieldValueOption
+                        {
+                            Name ="Disconnect",
+                            Value = "1",
+                            Default = false
+                        }
+                    }
+                }
+                ))
             .WithField("Qos", field => field
                 .OfType("MultiTextField")
                 .WithDisplayName("QoS Level")
