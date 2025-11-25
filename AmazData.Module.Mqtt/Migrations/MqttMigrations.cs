@@ -58,7 +58,7 @@ public class MqttMigrations : DataMigration
                     Required = true
                 }))
             .WithField("ConnectionState", field => field
-                .OfType("MultiTextField"))
+                .OfType("MultiTextField")
                 .WithDisplayName("ConnectionState")
                 .WithSettings(new MultiTextFieldSettings
                 {
@@ -70,17 +70,17 @@ public class MqttMigrations : DataMigration
                         {
                             Name = "Connected",
                             Value = "0",
-                            Default = true
+                            Default = false
                         },
                         new MultiTextFieldValueOption
                         {
                             Name ="Disconnect",
                             Value = "1",
-                            Default = false
+                            Default = true
                         }
                     }
-                }
-                ))
+                }))
+
             .WithField("Qos", field => field
                 .OfType("MultiTextField")
                 .WithDisplayName("QoS Level")
