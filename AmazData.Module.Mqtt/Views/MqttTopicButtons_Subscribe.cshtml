@@ -1,4 +1,3 @@
-@using OrchardCore.ContentManagement
 @model AmazData.Module.Mqtt.Models.MqttBrokerButtonsViewModel
 @{
     if (Model.ContentItem == null)
@@ -6,4 +5,4 @@
         return;
     }
 }
-<a href="/AmazData.Module.Mqtt/Subscription/Subscribe?topicId=@Model.ContentItem.ContentItemId" class="btn btn-sm btn-primary">订阅</a>
+<a asp-area="AmazData.Module.Mqtt" asp-controller="Subscription" asp-action="Subscribe" asp-route-topicId="@Model.ContentItem.ContentItemId" class="btn btn-sm btn-primary">订阅</a>

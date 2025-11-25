@@ -1,5 +1,4 @@
-﻿@using OrchardCore.ContentManagement
-@model AmazData.Module.Mqtt.Models.MqttBrokerButtonsViewModel
+﻿@model AmazData.Module.Mqtt.Models.MqttBrokerButtonsViewModel
 @*
     For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 *@
@@ -9,4 +8,4 @@
         return;
     }
 }
-<a href="/AmazData.Module.Mqtt/Home/Index?brokerId=@Model.ContentItem.ContentItemId" class="btn btn-sm btn-secondary">连接</a>
+<a asp-area="AmazData.Module.Mqtt" asp-controller="Home" asp-action="Index" asp-route-brokerId="@Model.ContentItem.ContentItemId" class="btn btn-sm btn-secondary">连接</a>
