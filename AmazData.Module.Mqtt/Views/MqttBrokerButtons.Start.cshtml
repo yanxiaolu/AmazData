@@ -1,4 +1,5 @@
-﻿@model AmazData.Module.Mqtt.Models.MqttBrokerButtonsViewModel
+﻿@using AmazData.Module.Mqtt.Models
+@model AmazData.Module.Mqtt.Models.MqttBrokerButtonsViewModel
 @*
     For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 *@
@@ -7,5 +8,10 @@
     {
         return;
     }
+    var brokerPart = Model.ContentItem.As<BrokerPart>();
+    var currentState = (brokerPart?.ConnectionState.Values?.FirstOrDefault() == "0") ? "Disconnected" : "Connected";
+    var buttonText = currentState == "Connected" ? "断开" : "连接";
+    var buttonClass = currentState == "Connected" ? "btn-danger" : "btn-success";
 }
-<a asp-area="AmazData.Module.Mqtt" asp-controller="Home" asp-action="Index" asp-route-brokerId="@Model.ContentItem.ContentItemId" class="btn btn-sm btn-secondary">连接</a>
+<a asp-area="AmazData.Module.Mqtt" asp-controller="Home" asp-action="Index"
+    asp-route-brokerId="@Model.ContentItem.ContentItemId" class="btn btn-sm @buttonClass">@buttonText</a>

@@ -1,9 +1,9 @@
 using AmazData.Module.Mqtt.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MQTTnet;
 using MQTTnet.Protocol;
 using System.Collections.Concurrent;
-using System.Text;
 
 namespace AmazData.Module.Mqtt.Services;
 
@@ -13,12 +13,14 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
     private readonly ConcurrentDictionary<string, IMqttClient> _clients = new();
     private readonly MqttClientFactory _clientFactory; // v5.0 核心工厂
     private readonly ILogger<MqttConnectionManager> _logger;
-
+    // 1. 引入 Scope 工厂，用于在单例中创建作用域
+    private readonly IServiceScopeFactory _scopeFactory;
     public event EventHandler<BrokerMessageEventArgs>? OnMessageReceived;
 
-    public MqttConnectionManager(ILogger<MqttConnectionManager> logger)
+    public MqttConnectionManager(ILogger<MqttConnectionManager> logger, IServiceScopeFactory scopeFactory)
     {
         _logger = logger;
+        _scopeFactory = scopeFactory;
         // [符合官方示例] 实例化 MqttClientFactory
         _clientFactory = new MqttClientFactory();
     }
@@ -78,6 +80,8 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
                     return client;
                 });
                 _logger.LogInformation($"[{config.Key}] 连接成功!");
+                // 4. 连接成功：更新数据库为 "已连接" (True)
+                await UpdateDbStateAsync(config.Key, true);
                 return true;
             }
             else
@@ -143,6 +147,8 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
 
                 await client.DisconnectAsync(disconnectOptions);
             }
+            // 4. 主动断开：更新数据库为 "断开" (False)
+            await UpdateDbStateAsync(key, false);
             client.Dispose();
             _logger.LogInformation($"[{key}] 已断开并清理资源");
         }
@@ -156,7 +162,24 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
         }
         throw new InvalidOperationException($"客户端 [{key}] 未找到或未连接。请先调用 ConnectAsync。");
     }
+    private async Task UpdateDbStateAsync(string brokerId, bool isConnected)
+    {
+        try
+        {
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                // 获取您在 Startup.cs 中注册的更新服务
+                var updater = scope.ServiceProvider.GetRequiredService<IBrokerService>();
 
+                // 调用更新方法
+                await updater.UpdateConnectionStateAsync(brokerId, isConnected);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"无法更新 Broker [{brokerId}] 的数据库状态。");
+        }
+    }
     public void Dispose()
     {
         foreach (var client in _clients.Values)
