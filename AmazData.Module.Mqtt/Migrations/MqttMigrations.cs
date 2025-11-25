@@ -68,15 +68,15 @@ public class MqttMigrations : DataMigration
                     {
                         new MultiTextFieldValueOption
                         {
-                            Name = "Connected",
+                            Name = "Disconnect",
                             Value = "0",
-                            Default = false
+                            Default = true
                         },
                         new MultiTextFieldValueOption
                         {
-                            Name ="Disconnect",
+                            Name ="Connected",
                             Value = "1",
-                            Default = true
+                            Default = false
                         }
                     }
                 }))
