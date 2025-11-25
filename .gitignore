@@ -57,3 +57,4 @@ nunit-*.xml
 App_Data/
 OrchardCore.db
 .DS_Store
+.vs/
