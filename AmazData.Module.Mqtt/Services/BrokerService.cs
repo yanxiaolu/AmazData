@@ -30,17 +30,17 @@ namespace AmazData.Module.Mqtt.Services
             contentItem.Alter<BrokerPart>(part =>
             {
                 // 定义状态值
-                var statusValue = isConnected ? "1" : "0";
+                var statusValue = isConnected ? 1 : 0;
 
                 // 检查字段是否为空（如果是新建的内容项，字段对象可能尚未实例化）
-                if (part.ConnectionState == null)
+                if (part.ConnectionState.Values == null)
                 {
-                    part.ConnectionState = new MultiTextField();
+                    part.ConnectionState.Values = new string[] { };
                 }
 
                 // 对于 MultiTextField，Values 属性存储选中的值（一个字符串数组）
                 // 由于 ConnectionState 是单选，我们将其设置为包含单个值的数组。
-                part.ConnectionState.Values = new[] { statusValue };
+                part.ConnectionState.Values = new[] { part.ConnectionState.Values[statusValue] };
             });
 
             // 3. 更新并发布
