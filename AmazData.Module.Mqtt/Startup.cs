@@ -35,6 +35,9 @@ public sealed class Startup : StartupBase
         services.AddScoped<IContentDisplayDriver, MqttTopicButtonsDisplayDriver>();
         // 注册后台任务
         services.AddScoped<IBackgroundTask, MqttBackgroundTask>();
+
+        // 注册事件处理后台服务
+        services.AddHostedService<MqttEventService>();
     }
 
     public override void Configure(IApplicationBuilder builder, IEndpointRouteBuilder routes, IServiceProvider serviceProvider)
@@ -51,6 +54,12 @@ public sealed class Startup : StartupBase
             areaName: "AmazData.Module.Mqtt",
             pattern: "Home/Index",
             defaults: new { controller = "Home", action = "Index" }
+        );
+        routes.MapAreaControllerRoute(
+            name: "HomeTest",
+            areaName: "AmazData.Module.Mqtt",
+            pattern: "Home/Test",
+            defaults: new { controller = "Home", action = "Test" }
         );
     }
 }

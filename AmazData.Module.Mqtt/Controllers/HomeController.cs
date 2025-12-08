@@ -15,19 +15,22 @@ namespace AmazData.Module.Mqtt.Controllers
         private readonly IMqttOptionsBuilderService _mqttOptionsBuilderService;
         private readonly INotifier _notifier;
         private readonly IHtmlLocalizer<HomeController> _localizer;
+        private readonly IBrokerService _brokerService;
         public HomeController(
-            IContentManager contentManager,
-            IMqttConnectionManager mqttConnectionManager,
-            IMqttOptionsBuilderService mqttOptionsBuilderService,
-            INotifier notifier,
-            IHtmlLocalizer<HomeController> localizer
-            )
+    IContentManager contentManager,
+    IMqttConnectionManager mqttConnectionManager,
+    IMqttOptionsBuilderService mqttOptionsBuilderService,
+    INotifier notifier,
+    IHtmlLocalizer<HomeController> localizer,
+    IBrokerService brokerService
+    )
         {
             _contentManager = contentManager;
             _mqttConnectionManager = mqttConnectionManager;
             _mqttOptionsBuilderService = mqttOptionsBuilderService;
             _notifier = notifier;
             _localizer = localizer;
+            _brokerService = brokerService;
         }
 
         public async Task<IActionResult> Index(string brokerId)
@@ -57,6 +60,12 @@ namespace AmazData.Module.Mqtt.Controllers
 
             return NotFound();
 
+        }
+
+        public async Task<IActionResult> Test()
+        {
+            _brokerService.CreateMessageRecordsAsync("testid", "test/topic", "test payload");
+            return Content("Test message record created.");
         }
     }
 }
