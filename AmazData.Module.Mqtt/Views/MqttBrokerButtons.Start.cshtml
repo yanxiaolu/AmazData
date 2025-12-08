@@ -1,5 +1,9 @@
-﻿@using AmazData.Module.Mqtt.Models
+@using AmazData.Module.Mqtt.Models
+@using Microsoft.Extensions.Logging
+@using OrchardCore.ContentManagement
 @model AmazData.Module.Mqtt.Models.MqttBrokerButtonsViewModel
+@inject OrchardCore.ContentManagement.IContentManager ContentManager
+@inject Microsoft.Extensions.Logging.ILogger<AmazData.Module.Mqtt.Services.BrokerService> _logger
 @*
     For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 *@
@@ -8,10 +12,21 @@
     {
         return;
     }
-    var brokerPart = Model.ContentItem.As<BrokerPart>();
-    var currentState = (brokerPart?.ConnectionState.Values?.FirstOrDefault() == "0") ? "Disconnected" : "Connected";
+
+    // To bypass any caching and ensure the latest state is displayed,
+    // fetch the latest published version of the content item directly.
+    var contentItem = await ContentManager.GetAsync(Model.ContentItem.ContentItemId, VersionOptions.Published);
+    if (contentItem == null)
+    {
+        return;
+    }
+
+    var brokerPart = contentItem.As<BrokerPart>();
+    var currentState = (brokerPart?.ConnectionState.Value == false) ? "Disconnected" : "Connected";
     var buttonText = currentState == "Connected" ? "断开" : "连接";
     var buttonClass = currentState == "Connected" ? "btn-danger" : "btn-success";
+    _logger.LogInformation("Rendering MqttBrokerButtons for Broker ID: {BrokerId} with current state: {CurrentState}",
+    contentItem.ContentItemId, currentState);
 }
 <a asp-area="AmazData.Module.Mqtt" asp-controller="Home" asp-action="Index"
     asp-route-brokerId="@Model.ContentItem.ContentItemId" class="btn btn-sm @buttonClass">@buttonText</a>
