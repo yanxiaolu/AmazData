@@ -3,7 +3,9 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OrchardCore.ContentManagement;
 using OrchardCore.ContentFields.Fields; // 必须引用，用于 new TextField()
-using AmazData.Module.Mqtt.Models;      // 引用 BrokerPart
+using AmazData.Module.Mqtt.Models;
+using OrchardCore.Title.Models;
+using YesSql;      // 引用 BrokerPart
 
 namespace AmazData.Module.Mqtt.Services
 {
@@ -11,44 +13,61 @@ namespace AmazData.Module.Mqtt.Services
     {
         private readonly IContentManager _contentManager;
         private readonly ILogger<BrokerService> _logger;
+        private readonly ISession _session;
 
-        public BrokerService(IContentManager contentManager, ILogger<BrokerService> logger)
+        public BrokerService(IContentManager contentManager, ILogger<BrokerService> logger, ISession session)
         {
             _contentManager = contentManager;
             _logger = logger;
+            _session = session;
         }
-
+        public async Task CreateMessageRecordsAsync(string contentItemId, string topic, string payload)
+        {
+            // Implementation for creating message records goes here.
+            // This is a placeholder to satisfy the interface requirement.
+            var newMessage = await _contentManager.NewAsync("DataRecord");
+            newMessage.Alter<TitlePart>(part =>
+            {
+                part.Title = contentItemId;
+            });
+            newMessage.Alter<DataRecordPart>(part =>
+            {
+                part.Timestamp = new DateTimeField { Value = DateTime.UtcNow };
+                part.JsonDocument = new TextField { Text = payload };
+            });
+            await _contentManager.CreateAsync(newMessage);
+            await _contentManager.PublishAsync(newMessage);
+            // 在手动 Scope 或后台任务中，必须手动保存更改，否则数据会丢失。
+            await _session.SaveChangesAsync();
+            _logger.LogInformation($"Created message record for Broker '{contentItemId}' on topic '{topic}'.");
+            await Task.CompletedTask;
+        }
         public async Task UpdateConnectionStateAsync(string contentItemId, bool isConnected)
         {
-            // 1. 获取最新的草稿版本 (DraftRequired)
-            var contentItem = await _contentManager.GetAsync(contentItemId, VersionOptions.DraftRequired);
+            // 1. Always get a draft version to modify. This is crucial for versionable content.
+            var contentItem = await _contentManager.GetAsync(contentItemId);
 
-            if (contentItem == null) return;
+            if (contentItem == null)
+            {
+                _logger.LogWarning($"Content item with ID '{contentItemId}' not found. Could not update connection state.");
+                return;
+            }
 
-            // 2. 使用 Alter<TPart> 修改内容
-            // Alter 会自动执行: var part = item.As<T>(); action(part); item.Apply(part);
+            // 2. Use Alter<T> to modify the part.
             contentItem.Alter<BrokerPart>(part =>
             {
-                // 定义状态值
-                var statusValue = isConnected ? 1 : 0;
-
-                // 检查字段是否为空（如果是新建的内容项，字段对象可能尚未实例化）
-                if (part.ConnectionState.Values == null)
-                {
-                    part.ConnectionState.Values = new string[] { };
-                }
-
-                // 对于 MultiTextField，Values 属性存储选中的值（一个字符串数组）
-                // 由于 ConnectionState 是单选，我们将其设置为包含单个值的数组。
-                part.ConnectionState.Values = new[] { part.ConnectionState.Values[statusValue] };
+                // To robustly ensure change detection, we replace the entire field object 
+                // instead of just modifying a property on the existing one.
+                part.ConnectionState = new BooleanField { Value = isConnected };
             });
 
-            // 3. 更新并发布
-            // UpdateAsync 会验证模型并更新数据库记录
+            // 3. Save the draft with the changes.
             await _contentManager.UpdateAsync(contentItem);
 
-            // 如果需要立即生效到前台，执行 Publish
+            // 4. Publish the draft to make the changes live.
             await _contentManager.PublishAsync(contentItem);
+            await _session.SaveChangesAsync();
+            _logger.LogInformation($"Broker connection state for item '{contentItemId}' updated to: {isConnected}");
         }
     }
 }

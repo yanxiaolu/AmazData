@@ -14,5 +14,6 @@ namespace AmazData.Module.Mqtt.Services
         /// <param name="contentItemId">Broker 内容项的 ID</param>
         /// <param name="isConnected">True 为 Connected (0), False 为 Disconnect (1)</param>
         Task UpdateConnectionStateAsync(string contentItemId, bool isConnected);
+        Task CreateMessageRecordsAsync(string contentItemId, string topic, string payload);
     }
 }

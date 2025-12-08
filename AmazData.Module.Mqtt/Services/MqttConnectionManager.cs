@@ -1,3 +1,4 @@
+using AmazData.Module.Mqtt.BackgroundServices;
 using AmazData.Module.Mqtt.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -53,16 +54,34 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
         var options = optionsBuilder.Build();
 
         // 3. 挂载消息接收事件
-        client.ApplicationMessageReceivedAsync += async e =>
+        // 修改 ApplicationMessageReceivedAsync 的挂载方式
+        client.ApplicationMessageReceivedAsync += async e => // 1. 添加 async 关键字
         {
-            // 获取 Payload
-            // 注意：v5 中 Payload 是 ReadOnlyMemory<byte>
-            // 直接使用 ConvertPayloadToString()，它会自动处理 Payload 为 null 的情况
             var payloadStr = e.ApplicationMessage.ConvertPayloadToString();
-            // 触发外部事件
+
+            // 触发外部事件 (非阻塞，根据需求决定是否 await)
             OnMessageReceived?.Invoke(this, new BrokerMessageEventArgs(config.Key, e.ApplicationMessage.Topic, payloadStr));
-            _logger.LogDebug($"[{config.Key}] 收到消息 -> 主题: {e.ApplicationMessage.Topic}, 内容: {payloadStr}");
-            await Task.CompletedTask;
+
+            _logger.LogDebug($"[{config.Key}] 收到消息...");
+
+            // 创建 Scope
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                try
+                {
+                    var brokerService = scope.ServiceProvider.GetRequiredService<IBrokerService>();
+
+                    // 2. 添加 await 关键字
+                    // 这会确保数据库操作彻底完成后，代码才会走到 using 结束的大括号
+                    await brokerService.CreateMessageRecordsAsync(config.Key, e.ApplicationMessage.Topic, payloadStr);
+
+                    _logger.LogInformation("Successfully created message record for topic {Topic}", e.ApplicationMessage.Topic);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error processing MQTT message from event for topic {Topic}", e.ApplicationMessage.Topic);
+                }
+            } // 3. 此时 Scope 销毁是安全的，因为数据库操作已完成
         };
 
         try
@@ -113,7 +132,6 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
 
         // 调用 SubscribeAsync 传入 Options
         var result = await client.SubscribeAsync(subscribeOptions);
-
         // 可以在这里检查 result.Items 来确认每个 topic 的订阅结果
         _logger.LogInformation($"[{key}] 已订阅主题: {topic}");
     }
