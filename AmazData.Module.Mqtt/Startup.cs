@@ -21,23 +21,25 @@ public sealed class Startup : StartupBase
     public override void ConfigureServices(IServiceCollection services)
     {
 
-
-        services.AddScoped<IMqttOptionsBuilderService, MqttOptionsBuilderService>();
-        services.AddScoped<IBrokerService, BrokerService>();
-        services.AddSingleton<IMqttConnectionManager, MqttConnectionManager>();
-        services.AddDataMigration<MqttMigrations>();
+        //添加内容类型
         services.AddContentPart<BrokerPart>();
         services.AddContentPart<TopicPart>();
         services.AddContentPart<DataRecordPart>();
-        services.AddScoped<IDisplayDriver<User>, AmazDataMqttUserButtonDisplayDriver>();
+        services.AddDataMigration<MqttMigrations>();
+        // Scoped
+        services.AddScoped<IBrokerService, BrokerService>();
+        // Singleton
+        services.AddSingleton<IMqttConnectionManager, MqttConnectionManager>();
+        // 【新增】注册消息通道 (Singleton)
+        services.AddSingleton<MqttMessageChannel>();
+
         // 注册 Content Display Driver 以添加按钮
         services.AddScoped<IContentDisplayDriver, MqttBrokerButtonsDisplayDriver>();
         services.AddScoped<IContentDisplayDriver, MqttTopicButtonsDisplayDriver>();
-        // 注册后台任务
-        services.AddScoped<IBackgroundTask, MqttBackgroundTask>();
+        services.AddScoped<IDisplayDriver<User>, AmazDataMqttUserButtonDisplayDriver>();
 
-        // 注册事件处理后台服务
-        services.AddHostedService<MqttEventService>();
+        // 注册后台任务
+        services.AddScoped<IBackgroundTask, MqttMessageProcessor>();
     }
 
     public override void Configure(IApplicationBuilder builder, IEndpointRouteBuilder routes, IServiceProvider serviceProvider)

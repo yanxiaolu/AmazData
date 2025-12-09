@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OrchardCore.ContentManagement;
 using OrchardCore.ContentFields.Fields; // 必须引用，用于 new TextField()
@@ -7,67 +5,82 @@ using AmazData.Module.Mqtt.Models;
 using OrchardCore.Title.Models;
 using YesSql;      // 引用 BrokerPart
 
-namespace AmazData.Module.Mqtt.Services
-{
-    public class BrokerService : IBrokerService
-    {
-        private readonly IContentManager _contentManager;
-        private readonly ILogger<BrokerService> _logger;
-        private readonly ISession _session;
+namespace AmazData.Module.Mqtt.Services;
 
-        public BrokerService(IContentManager contentManager, ILogger<BrokerService> logger, ISession session)
+public class BrokerService : IBrokerService
+{
+    private readonly IContentManager _contentManager;
+    private readonly ISession _session;
+    private readonly ILogger<BrokerService> _logger;
+
+    public BrokerService(
+        IContentManager contentManager,
+        ISession session,
+        ILogger<BrokerService> logger)
+    {
+        _contentManager = contentManager;
+        _session = session;
+        _logger = logger;
+    }
+
+    public async Task CreateMessageRecordsAsync(string contentItemId, string topic, string payload)
+    {
+        try
         {
-            _contentManager = contentManager;
-            _logger = logger;
-            _session = session;
-        }
-        public async Task CreateMessageRecordsAsync(string contentItemId, string topic, string payload)
-        {
-            // Implementation for creating message records goes here.
-            // This is a placeholder to satisfy the interface requirement.
             var newMessage = await _contentManager.NewAsync("DataRecord");
+
             newMessage.Alter<TitlePart>(part =>
             {
-                part.Title = contentItemId;
+                // 使用 Guid 防止标题冲突，或者根据需求自定义
+                part.Title = $"{contentItemId}-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..8]}";
             });
+
             newMessage.Alter<DataRecordPart>(part =>
             {
                 part.Timestamp = new DateTimeField { Value = DateTime.UtcNow };
                 part.JsonDocument = new TextField { Text = payload };
             });
+
             await _contentManager.CreateAsync(newMessage);
+            // 只有需要立即在前台显示时才Publish，如果是日志记录，Draft也是可以的，视需求而定。
+            // 这里假设需要 Publish
             await _contentManager.PublishAsync(newMessage);
-            // 在手动 Scope 或后台任务中，必须手动保存更改，否则数据会丢失。
+
+            // 【关键】强制提交事务，确保在后台 Scope 中数据落地
             await _session.SaveChangesAsync();
-            _logger.LogInformation($"Created message record for Broker '{contentItemId}' on topic '{topic}'.");
-            await Task.CompletedTask;
+
+            _logger.LogDebug("Message recorded for Topic: {Topic}", topic);
         }
-        public async Task UpdateConnectionStateAsync(string contentItemId, bool isConnected)
+        catch (Exception ex)
         {
-            // 1. Always get a draft version to modify. This is crucial for versionable content.
-            var contentItem = await _contentManager.GetAsync(contentItemId);
-
-            if (contentItem == null)
-            {
-                _logger.LogWarning($"Content item with ID '{contentItemId}' not found. Could not update connection state.");
-                return;
-            }
-
-            // 2. Use Alter<T> to modify the part.
-            contentItem.Alter<BrokerPart>(part =>
-            {
-                // To robustly ensure change detection, we replace the entire field object 
-                // instead of just modifying a property on the existing one.
-                part.ConnectionState = new BooleanField { Value = isConnected };
-            });
-
-            // 3. Save the draft with the changes.
-            await _contentManager.UpdateAsync(contentItem);
-
-            // 4. Publish the draft to make the changes live.
-            await _contentManager.PublishAsync(contentItem);
-            await _session.SaveChangesAsync();
-            _logger.LogInformation($"Broker connection state for item '{contentItemId}' updated to: {isConnected}");
+            _logger.LogError(ex, "Failed to create message record for {Topic}", topic);
+            throw; // 抛出异常以便上层获知
         }
+    }
+
+    public async Task UpdateConnectionStateAsync(string contentItemId, bool isConnected)
+    {
+        var contentItem = await _contentManager.GetAsync(contentItemId, VersionOptions.DraftRequired);
+
+        if (contentItem == null)
+        {
+            _logger.LogWarning("Broker {Id} not found.", contentItemId);
+            return;
+        }
+
+        contentItem.Alter<BrokerPart>(part =>
+        {
+            if (part.ConnectionState == null) part.ConnectionState = new BooleanField();
+            part.ConnectionState.Value = isConnected;
+        });
+
+        await _contentManager.UpdateAsync(contentItem);
+        // 状态改变必须 Publish 才能让前台看到
+        await _contentManager.PublishAsync(contentItem);
+
+        // 强制提交，确保 Manager 中的 Scope 能生效
+        await _session.SaveChangesAsync();
+
+        _logger.LogInformation("Broker {Id} state updated to: {State}", contentItemId, isConnected);
     }
 }

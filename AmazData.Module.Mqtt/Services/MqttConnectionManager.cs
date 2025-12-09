@@ -10,108 +10,94 @@ namespace AmazData.Module.Mqtt.Services;
 
 public class MqttConnectionManager : IMqttConnectionManager, IDisposable
 {
-    // 线程安全的字典，存储 {Key : Client}
     private readonly ConcurrentDictionary<string, IMqttClient> _clients = new();
-    private readonly MqttClientFactory _clientFactory; // v5.0 核心工厂
+    private readonly MqttClientFactory _clientFactory;
     private readonly ILogger<MqttConnectionManager> _logger;
-    // 1. 引入 Scope 工厂，用于在单例中创建作用域
     private readonly IServiceScopeFactory _scopeFactory;
+
+    // 注入 Channel
+    private readonly MqttMessageChannel _messageChannel;
+
     public event EventHandler<BrokerMessageEventArgs>? OnMessageReceived;
 
-    public MqttConnectionManager(ILogger<MqttConnectionManager> logger, IServiceScopeFactory scopeFactory)
+    public MqttConnectionManager(
+        ILogger<MqttConnectionManager> logger,
+        IServiceScopeFactory scopeFactory,
+        MqttMessageChannel messageChannel) // 注入
     {
         _logger = logger;
         _scopeFactory = scopeFactory;
-        // [符合官方示例] 实例化 MqttClientFactory
+        _messageChannel = messageChannel;
         _clientFactory = new MqttClientFactory();
     }
 
     public async Task<bool> ConnectAsync(BrokerConfig config)
     {
-        // 如果已存在且已连接，直接返回
         if (_clients.TryGetValue(config.Key, out var existingClient) && existingClient.IsConnected)
         {
-            _logger.LogWarning($"Broker [{config.Key}] 已经是连接状态。");
             return true;
         }
 
-        // 1. 创建客户端 (使用 MqttClientFactory)
         var client = _clientFactory.CreateMqttClient();
 
-        // 2. 构建连接选项 (使用 MqttClientOptionsBuilder)
-        var optionsBuilder = new MqttClientOptionsBuilder()
+        // 构建 Options (省略部分代码，与原版一致，建议提取为 private helper method)
+        var options = new MqttClientOptionsBuilder()
             .WithTcpServer(config.Host, config.Port)
             .WithClientId(string.IsNullOrEmpty(config.ClientId) ? Guid.NewGuid().ToString() : config.ClientId)
-            // v5.0 建议使用 CleanSession (对于 MQTT 3.x) 或 CleanStart (对于 MQTT 5.0)
             .WithCleanSession()
             .WithTimeout(TimeSpan.FromSeconds(10));
 
-        if (!string.IsNullOrEmpty(config.Username))
-        {
-            optionsBuilder.WithCredentials(config.Username, config.Password);
-        }
+        if (!string.IsNullOrEmpty(config.Username)) options.WithCredentials(config.Username, config.Password);
 
-        var options = optionsBuilder.Build();
+        // --- 事件处理 ---
 
-        // 3. 挂载消息接收事件
-        // 修改 ApplicationMessageReceivedAsync 的挂载方式
-        client.ApplicationMessageReceivedAsync += async e => // 1. 添加 async 关键字
+        client.ApplicationMessageReceivedAsync += async e =>
         {
             var payloadStr = e.ApplicationMessage.ConvertPayloadToString();
+            var eventArgs = new BrokerMessageEventArgs(config.Key, e.ApplicationMessage.Topic, payloadStr);
 
-            // 触发外部事件 (非阻塞，根据需求决定是否 await)
-            OnMessageReceived?.Invoke(this, new BrokerMessageEventArgs(config.Key, e.ApplicationMessage.Topic, payloadStr));
+            // 1. 触发 C# 事件 (给实时 UI 或 SignalR 使用)
+            OnMessageReceived?.Invoke(this, eventArgs);
 
-            _logger.LogDebug($"[{config.Key}] 收到消息...");
-
-            // 创建 Scope
-            using (var scope = _scopeFactory.CreateScope())
+            // 2. 【核心变化】写入 Channel，而不是直接写库
+            // 这是一个极快的内存操作，不会阻塞 MQTT 线程
+            if (!_messageChannel.TryWrite(eventArgs))
             {
-                try
-                {
-                    var brokerService = scope.ServiceProvider.GetRequiredService<IBrokerService>();
+                _logger.LogWarning("Failed to write message to channel. Queue might be full.");
+            }
 
-                    // 2. 添加 await 关键字
-                    // 这会确保数据库操作彻底完成后，代码才会走到 using 结束的大括号
-                    await brokerService.CreateMessageRecordsAsync(config.Key, e.ApplicationMessage.Topic, payloadStr);
+            _logger.LogDebug("[{Key}] Enqueued message from {Topic}", config.Key, e.ApplicationMessage.Topic);
 
-                    _logger.LogInformation("Successfully created message record for topic {Topic}", e.ApplicationMessage.Topic);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error processing MQTT message from event for topic {Topic}", e.ApplicationMessage.Topic);
-                }
-            } // 3. 此时 Scope 销毁是安全的，因为数据库操作已完成
+            await Task.CompletedTask;
+        };
+
+        client.DisconnectedAsync += async e =>
+        {
+            _logger.LogWarning("[{Key}] Disconnected: {Reason}", config.Key, e.Reason);
+            if (e.ClientWasConnected)
+            {
+                // 状态更新频率低，可以直接在这里用 Scope
+                await UpdateDbStateAsync(config.Key, false);
+            }
         };
 
         try
         {
-            _logger.LogInformation($"[{config.Key}] 正在连接...");
-            // 4. 执行连接
-            var result = await client.ConnectAsync(options);
+            var result = await client.ConnectAsync(options.Build());
 
             if (result.ResultCode == MqttClientConnectResultCode.Success)
             {
-                // 更新字典
-                _clients.AddOrUpdate(config.Key, client, (k, old) =>
-                {
-                    old.Dispose(); // 如果有旧的，先销毁
-                    return client;
-                });
-                _logger.LogInformation($"[{config.Key}] 连接成功!");
-                // 4. 连接成功：更新数据库为 "已连接" (True)
+                _clients.AddOrUpdate(config.Key, client, (k, old) => { old.Dispose(); return client; });
+                // 这里建议由 Controller 调用 UpdateDbStateAsync(true)，或者保留在这里
+                // 如果保留在这里，确保 UpdateDbStateAsync 内部使用了 CommitAsync
                 await UpdateDbStateAsync(config.Key, true);
                 return true;
             }
-            else
-            {
-                _logger.LogError($"[{config.Key}] 连接失败: {result.ResultCode} - {result.ReasonString}");
-                return false;
-            }
+            return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"[{config.Key}] 连接异常");
+            _logger.LogError(ex, "[{Key}] Connection exception", config.Key);
             return false;
         }
     }
@@ -157,18 +143,10 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
         {
             if (client.IsConnected)
             {
-                // [符合官方示例 Client_Connection_Samples.cs]
-                // v5.0 必须构建 MqttClientDisconnectOptions
-                var disconnectOptions = new MqttClientDisconnectOptionsBuilder()
-                    .WithReason(MqttClientDisconnectOptionsReason.NormalDisconnection)
-                    .Build();
-
-                await client.DisconnectAsync(disconnectOptions);
+                await client.DisconnectAsync(new MqttClientDisconnectOptionsBuilder().WithReason(MqttClientDisconnectOptionsReason.NormalDisconnection).Build());
             }
-            // 4. 主动断开：更新数据库为 "断开" (False)
             await UpdateDbStateAsync(key, false);
             client.Dispose();
-            _logger.LogInformation($"[{key}] 已断开并清理资源");
         }
     }
 
@@ -182,21 +160,10 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
     }
     private async Task UpdateDbStateAsync(string brokerId, bool isConnected)
     {
-        try
-        {
-            using (var scope = _scopeFactory.CreateScope())
-            {
-                // 获取您在 Startup.cs 中注册的更新服务
-                var updater = scope.ServiceProvider.GetRequiredService<IBrokerService>();
-
-                // 调用更新方法
-                await updater.UpdateConnectionStateAsync(brokerId, isConnected);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"无法更新 Broker [{brokerId}] 的数据库状态。");
-        }
+        using var scope = _scopeFactory.CreateScope();
+        var updater = scope.ServiceProvider.GetRequiredService<IBrokerService>();
+        // BrokerService 内部已经有了 CommitAsync，所以这里 await 即可
+        await updater.UpdateConnectionStateAsync(brokerId, isConnected);
     }
     public void Dispose()
     {
