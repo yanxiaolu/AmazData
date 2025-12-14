@@ -1,11 +1,26 @@
 using Microsoft.Extensions.Logging;
 using OrchardCore.ContentManagement;
-using OrchardCore.ContentFields.Fields; // 必须引用，用于 new TextField()
+using OrchardCore.ContentFields.Fields;
 using AmazData.Module.Mqtt.Models;
 using OrchardCore.Title.Models;
-using YesSql;      // 引用 BrokerPart
+using YesSql;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System;
+using System.Threading.Tasks;
 
 namespace AmazData.Module.Mqtt.Services;
+
+// Helper class for deserializing the incoming JSON payload.
+// This class should be used as a transient object to hold data before mapping it to the ContentPart.
+file class MqttJsonPayload
+{
+    [JsonPropertyName("time")]
+    public string Time { get; set; }
+
+    [JsonPropertyName("Data")]
+    public JsonElement Data { get; set; }
+}
 
 public class BrokerService : IBrokerService
 {
@@ -27,34 +42,44 @@ public class BrokerService : IBrokerService
     {
         try
         {
+            var payloadObject = JsonSerializer.Deserialize<MqttJsonPayload>(payload);
+
             var newMessage = await _contentManager.NewAsync("DataRecord");
 
             newMessage.Alter<TitlePart>(part =>
             {
-                // 使用 Guid 防止标题冲突，或者根据需求自定义
-                part.Title = $"{contentItemId}-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..8]}";
+                part.Title = $"{topic}-{payloadObject.Time}";
             });
 
             newMessage.Alter<DataRecordPart>(part =>
             {
-                part.Timestamp = new DateTimeField { Value = DateTime.UtcNow };
-                part.JsonDocument = new TextField { Text = payload };
+                if (DateTime.TryParse(payloadObject.Time, out var timestamp))
+                {
+                    part.Time = new DateTimeField { Value = timestamp };
+                }
+                else
+                {
+                    // Fallback or log error if timestamp format is incorrect
+                    part.Time = new DateTimeField { Value = DateTime.UtcNow };
+                }
+                
+                part.JsonData = new TextField { Text = payloadObject.Data.ToString() };
             });
 
             await _contentManager.CreateAsync(newMessage);
-            // 只有需要立即在前台显示时才Publish，如果是日志记录，Draft也是可以的，视需求而定。
-            // 这里假设需要 Publish
             await _contentManager.PublishAsync(newMessage);
-
-            // 【关键】强制提交事务，确保在后台 Scope 中数据落地
             await _session.SaveChangesAsync();
 
             _logger.LogDebug("Message recorded for Topic: {Topic}", topic);
         }
+        catch (JsonException jsonEx)
+        {
+            _logger.LogError(jsonEx, "Failed to deserialize JSON payload for {Topic}. Payload: {Payload}", topic, payload);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create message record for {Topic}", topic);
-            throw; // 抛出异常以便上层获知
+            throw; // Re-throw to allow the background service to see the exception
         }
     }
 
@@ -75,10 +100,7 @@ public class BrokerService : IBrokerService
         });
 
         await _contentManager.UpdateAsync(contentItem);
-        // 状态改变必须 Publish 才能让前台看到
         await _contentManager.PublishAsync(contentItem);
-
-        // 强制提交，确保 Manager 中的 Scope 能生效
         await _session.SaveChangesAsync();
 
         _logger.LogInformation("Broker {Id} state updated to: {State}", contentItemId, isConnected);
