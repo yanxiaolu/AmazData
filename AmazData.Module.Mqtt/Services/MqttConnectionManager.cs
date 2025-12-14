@@ -1,4 +1,3 @@
-using AmazData.Module.Mqtt.BackgroundServices;
 using AmazData.Module.Mqtt.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using OrchardCore.ContentManagement;
-using System.Threading.Tasks;
 using AmazData.Module.Mqtt.Services;
 using OrchardCore.DisplayManagement.Notify;
 using Microsoft.AspNetCore.Mvc.Localization;

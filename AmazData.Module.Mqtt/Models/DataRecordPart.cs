@@ -1,4 +1,3 @@
-using System;
 using OrchardCore.ContentFields.Fields;
 using OrchardCore.ContentManagement;
 

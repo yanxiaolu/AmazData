@@ -1,5 +1,3 @@
-using System;
-using OrchardCore;
 using OrchardCore.DisplayManagement.Handlers;
 using OrchardCore.DisplayManagement.Views;
 using OrchardCore.Users.Models;

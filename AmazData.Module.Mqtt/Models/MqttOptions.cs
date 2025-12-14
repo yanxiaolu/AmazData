@@ -1,5 +1,3 @@
-using System;
-
 namespace AmazData.Module.Mqtt.Models;
 
 public class MqttOptions

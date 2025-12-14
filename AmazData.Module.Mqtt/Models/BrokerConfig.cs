@@ -1,5 +1,3 @@
-using System;
-
 namespace AmazData.Module.Mqtt.Models;
 
 // 连接配置：用于传递 Broker 信息

@@ -1,7 +1,3 @@
-using MQTTnet;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-
 namespace AmazData.Module.Mqtt.Services
 {
     public interface IMqttSubscriptionManager

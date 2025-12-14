@@ -1,6 +1,3 @@
-using System.Threading.Tasks;
-using AmazData.Module.Mqtt.Models;
-
 namespace AmazData.Module.Mqtt.Services
 {
     /// <summary>
