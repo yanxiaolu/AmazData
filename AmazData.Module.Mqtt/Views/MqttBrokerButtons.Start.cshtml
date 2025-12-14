@@ -28,5 +28,5 @@
     _logger.LogInformation("Rendering MqttBrokerButtons for Broker ID: {BrokerId} with current state: {CurrentState}",
     contentItem.ContentItemId, currentState);
 }
-<a asp-area="AmazData.Module.Mqtt" asp-controller="Home" asp-action="Index"
+<a asp-area="AmazData.Module.Mqtt" asp-controller="MqttBroker" asp-action="ConnectBroker"
     asp-route-brokerId="@Model.ContentItem.ContentItemId" class="btn btn-sm @buttonClass">@buttonText</a>
