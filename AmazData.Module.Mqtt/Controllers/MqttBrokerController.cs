@@ -8,18 +8,18 @@ using AmazData.Module.Mqtt.Models;
 
 namespace AmazData.Module.Mqtt.Controllers
 {
-    public class HomeController : Controller
+    public class MqttBrokerController : Controller
     {
         private readonly IContentManager _contentManager;
         private readonly IMqttConnectionManager _mqttConnectionManager;
         private readonly INotifier _notifier;
-        private readonly IHtmlLocalizer<HomeController> _localizer;
+        private readonly IHtmlLocalizer<MqttBrokerController> _localizer;
         private readonly IBrokerService _brokerService;
-        public HomeController(
+        public MqttBrokerController(
     IContentManager contentManager,
     IMqttConnectionManager mqttConnectionManager,
     INotifier notifier,
-    IHtmlLocalizer<HomeController> localizer,
+    IHtmlLocalizer<MqttBrokerController> localizer,
     IBrokerService brokerService
     )
         {
@@ -30,7 +30,7 @@ namespace AmazData.Module.Mqtt.Controllers
             _brokerService = brokerService;
         }
 
-        public async Task<IActionResult> Index(string brokerId)
+        public async Task<IActionResult> ConnectBroker(string brokerId)
         {
             var contentItem = await _contentManager.GetAsync(brokerId);
 
@@ -61,7 +61,7 @@ namespace AmazData.Module.Mqtt.Controllers
 
         public async Task<IActionResult> Test()
         {
-            _brokerService.CreateMessageRecordsAsync("testid", "test/topic", "test payload");
+            await _brokerService.CreateMessageRecordsAsync("testid", "test/topic", "test payload");
             return Content("Test message record created.");
         }
     }
