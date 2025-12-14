@@ -28,6 +28,7 @@ public sealed class Startup : StartupBase
         services.AddDataMigration<MqttMigrations>();
         // Scoped
         services.AddScoped<IBrokerService, BrokerService>();
+        services.AddScoped<IMqttSubscriptionManager, MqttSubscriptionManager>();
         // Singleton
         services.AddSingleton<IMqttConnectionManager, MqttConnectionManager>();
         // 【新增】注册消息通道 (Singleton)
@@ -40,6 +41,7 @@ public sealed class Startup : StartupBase
 
         // 注册后台任务
         services.AddScoped<IBackgroundTask, MqttMessageProcessor>();
+
     }
 
     public override void Configure(IApplicationBuilder builder, IEndpointRouteBuilder routes, IServiceProvider serviceProvider)
@@ -48,20 +50,20 @@ public sealed class Startup : StartupBase
             name: "Subscription",
             areaName: "AmazData.Module.Mqtt",
             pattern: "Subscription/{action}/{id?}",
-            defaults: new { controller = "Subscription" }
+            defaults: new { controller = "MqttTopic" }
         );
 
         routes.MapAreaControllerRoute(
-            name: "Home",
+            name: "ConnectBroker",
             areaName: "AmazData.Module.Mqtt",
-            pattern: "Home/Index",
-            defaults: new { controller = "Home", action = "Index" }
+            pattern: "MqttBroker/ConnectBroker/{id?}",
+            defaults: new { controller = "MqttBroker", action = "ConnectBroker" }
         );
         routes.MapAreaControllerRoute(
             name: "HomeTest",
             areaName: "AmazData.Module.Mqtt",
             pattern: "Home/Test",
-            defaults: new { controller = "Home", action = "Test" }
+            defaults: new { controller = "MqttBroker", action = "Test" }
         );
     }
 }
