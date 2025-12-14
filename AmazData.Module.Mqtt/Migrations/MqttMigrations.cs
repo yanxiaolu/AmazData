@@ -22,7 +22,6 @@ public class MqttMigrations : DataMigration
             .WithPart("BrokerPart")
             .Creatable()
             .Listable()
-            .Versionable()
         );
 
         // 2. 定义 Topic 类型
@@ -31,7 +30,6 @@ public class MqttMigrations : DataMigration
             .WithPart("TopicPart")
             .Creatable()
             .Listable()
-            .Versionable()
         );
 
         // 3. 定义 DataRecord 类型
@@ -39,7 +37,6 @@ public class MqttMigrations : DataMigration
             .WithPart("DataRecordPart")
             .Creatable()
             .Listable()
-            .Versionable()
         );
 
         // 4. 定义 BrokerPart (核心修改部分)
