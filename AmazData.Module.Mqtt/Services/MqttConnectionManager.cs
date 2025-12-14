@@ -11,6 +11,7 @@ namespace AmazData.Module.Mqtt.Services;
 public class MqttConnectionManager : IMqttConnectionManager, IDisposable
 {
     private readonly ConcurrentDictionary<string, IMqttClient> _clients = new();
+    private readonly ConcurrentDictionary<string, ConcurrentBag<string>> _subscriptions = new();
     private readonly MqttClientFactory _clientFactory;
     private readonly ILogger<MqttConnectionManager> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -39,6 +40,7 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
         }
 
         var client = _clientFactory.CreateMqttClient();
+        _subscriptions.TryAdd(config.Key, new ConcurrentBag<string>());
 
         // 构建 Options (省略部分代码，与原版一致，建议提取为 private helper method)
         var options = new MqttClientOptionsBuilder()
@@ -74,6 +76,7 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
         client.DisconnectedAsync += async e =>
         {
             _logger.LogWarning("[{Key}] Disconnected: {Reason}", config.Key, e.Reason);
+            _subscriptions.TryRemove(config.Key, out _);
             if (e.ClientWasConnected)
             {
                 // 状态更新频率低，可以直接在这里用 Scope
@@ -118,8 +121,42 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
 
         // 调用 SubscribeAsync 传入 Options
         var result = await client.SubscribeAsync(subscribeOptions);
+        
+        if (_subscriptions.TryGetValue(key, out var topics))
+        {
+            if (!topics.Contains(topic))
+            {
+                topics.Add(topic);
+            }
+        }
+        
         // 可以在这里检查 result.Items 来确认每个 topic 的订阅结果
         _logger.LogInformation($"[{key}] 已订阅主题: {topic}");
+    }
+    
+    public async Task UnsubscribeAsync(string key, string topic)
+    {
+        var client = GetClient(key);
+        await client.UnsubscribeAsync(topic);
+
+        if (_subscriptions.TryGetValue(key, out var topics))
+        {
+            // ConcurrentBag doesn't have a direct Remove. We need to recreate it.
+            var newTopics = new ConcurrentBag<string>(topics.Except(new[] { topic }));
+            _subscriptions.AddOrUpdate(key, newTopics, (k, old) => newTopics);
+        }
+
+        _logger.LogInformation($"[{key}] 已取消订阅主题: {topic}");
+    }
+
+    public Task<IReadOnlyList<string>> GetSubscriptionsAsync(string key)
+    {
+        if (_subscriptions.TryGetValue(key, out var topics))
+        {
+            return Task.FromResult<IReadOnlyList<string>>(topics.ToList());
+        }
+
+        return Task.FromResult<IReadOnlyList<string>>(new List<string>());
     }
 
     public async Task PublishAsync(string key, string topic, string payload)
@@ -145,6 +182,7 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
             {
                 await client.DisconnectAsync(new MqttClientDisconnectOptionsBuilder().WithReason(MqttClientDisconnectOptionsReason.NormalDisconnection).Build());
             }
+            _subscriptions.TryRemove(key, out _);
             await UpdateDbStateAsync(key, false);
             client.Dispose();
         }
@@ -172,5 +210,6 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
             client.Dispose();
         }
         _clients.Clear();
+        _subscriptions.Clear();
     }
 }

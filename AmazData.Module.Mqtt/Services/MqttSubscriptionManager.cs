@@ -1,45 +1,99 @@
-// using Microsoft.Extensions.Logging;
-// using OrchardCore.ContentManagement;
+using AmazData.Module.Mqtt.Models;
+using Microsoft.Extensions.Logging;
+using OrchardCore.ContentManagement;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
-// namespace AmazData.Module.Mqtt.Services
-// {
-//     public class MqttSubscriptionManager : IMqttSubscriptionManager
-//     {
+namespace AmazData.Module.Mqtt.Services
+{
+    public class MqttSubscriptionManager : IMqttSubscriptionManager
+    {
+        private readonly IMqttConnectionManager _connectionManager;
+        private readonly IContentManager _contentManager;
+        private readonly ILogger<MqttSubscriptionManager> _logger;
 
-//         private readonly IMqttConnectionManager _connectionManager;
-//         private readonly ILogger<MqttSubscriptionManager> _logger;
+        public MqttSubscriptionManager(
+            IMqttConnectionManager connectionManager,
+            IContentManager contentManager,
+            ILogger<MqttSubscriptionManager> logger)
+        {
+            _connectionManager = connectionManager;
+            _contentManager = contentManager;
+            _logger = logger;
+        }
 
-//         public MqttSubscriptionManager(IMqttConnectionManager connectionManager, ILogger<MqttSubscriptionManager> logger)
-//         {
-//             _connectionManager = connectionManager;
-//             _logger = logger;
-//         }
+        public async Task SubscribeAsync(string topicItemId, string topicToSubscribe)
+        {
+            var topicItem = await _contentManager.GetAsync(topicItemId);
+            if (topicItem == null)
+            {
+                _logger.LogWarning("Subscribe: Could not find Topic ContentItem with ID {TopicId}", topicItemId);
+                return;
+            }
 
-//         public async Task SubscribeAsync(string topicItemId, string topicToSubscribe)
-//         {
-//             var connectionId = topicItemId; // topicItemId 就是 connectionId
+            var topicPart = topicItem.As<TopicPart>();
+            if (topicPart == null)
+            {
+                _logger.LogWarning("Subscribe: ContentItem {TopicId} does not have a TopicPart", topicItemId);
+                return;
+            }
+            
+            var brokerId = topicPart.Broker?.ContentItemIds?.FirstOrDefault();
+            if (string.IsNullOrEmpty(brokerId))
+            {
+                _logger.LogWarning("Subscribe: Topic {TopicId} is not associated with a Broker", topicItemId);
+                return;
+            }
 
-//             _logger.LogInformation("Requesting subscription to '{Topic}' for connection '{ConnectionId}'.", topicToSubscribe, connectionId);
+            _logger.LogInformation("Requesting subscription to '{Topic}' for Broker '{BrokerId}'.", topicToSubscribe, brokerId);
+            await _connectionManager.SubscribeAsync(brokerId, topicToSubscribe);
+            _logger.LogInformation("Subscription request for '{Topic}' completed for Broker '{BrokerId}'.", topicToSubscribe, brokerId);
+        }
 
-//             // 将所有复杂逻辑委托给 ConnectionManager
-//             await _connectionManager.AddSubscriptionAsync(connectionId, topicToSubscribe);
+        public async Task UnsubscribeAsync(string topicItemId)
+        {
+            var topicItem = await _contentManager.GetAsync(topicItemId);
+            if (topicItem == null)
+            {
+                _logger.LogWarning("Unsubscribe: Could not find Topic ContentItem with ID {TopicId}", topicItemId);
+                return;
+            }
 
-//             _logger.LogInformation("Subscription request for '{Topic}' completed for connection '{ConnectionId}'.", topicToSubscribe, connectionId);
-//         }
+            var topicPart = topicItem.As<TopicPart>();
+            if (topicPart == null)
+            {
+                _logger.LogWarning("Unsubscribe: ContentItem {TopicId} does not have a TopicPart", topicItemId);
+                return;
+            }
 
-//         public Task UnsubscribeAsync(string topicItemId)
-//         {
-//             throw new NotImplementedException();
-//         }
+            var topicToUnsubscribe = topicPart.TopicPattern?.Text;
+            if (string.IsNullOrEmpty(topicToUnsubscribe))
+            {
+                _logger.LogWarning("Unsubscribe: Topic {TopicId} does not have a topic pattern defined", topicItemId);
+                return;
+            }
+            
+            var brokerId = topicPart.Broker?.ContentItemIds?.FirstOrDefault();
+            if (string.IsNullOrEmpty(brokerId))
+            {
+                _logger.LogWarning("Unsubscribe: Topic {TopicId} is not associated with a Broker", topicItemId);
+                return;
+            }
 
-//         public Task<IReadOnlyList<string>> ListSubscriptionsAsync(string brokerItemId)
-//         {
-//             throw new NotImplementedException();
-//         }
+            _logger.LogInformation("Requesting to unsubscribe from '{Topic}' for Broker '{BrokerId}'.", topicToUnsubscribe, brokerId);
+            await _connectionManager.UnsubscribeAsync(brokerId, topicToUnsubscribe);
+            _logger.LogInformation("Unsubscribe request for '{Topic}' completed for Broker '{BrokerId}'.", topicToUnsubscribe, brokerId);
+        }
 
-//         public Task<long> GetMessageStatsAsync(string brokerItemId)
-//         {
-//             throw new NotImplementedException();
-//         }
-//     }
-// }
+        public async Task<IReadOnlyList<string>> ListSubscriptionsAsync(string brokerItemId)
+        {
+            return await _connectionManager.GetSubscriptionsAsync(brokerItemId);
+        }
+
+        public Task<long> GetMessageStatsAsync(string brokerItemId)
+        {
+            throw new System.NotImplementedException();
+        }
+    }
+}
