@@ -53,15 +53,15 @@ public class BrokerService : IBrokerService
             {
                 if (DateTime.TryParse(payloadObject.Time, out var timestamp))
                 {
-                    part.Time = new DateTimeField { Value = timestamp };
+                    part.Timestamp = new DateTimeField { Value = timestamp };
                 }
                 else
                 {
                     // Fallback or log error if timestamp format is incorrect
-                    part.Time = new DateTimeField { Value = DateTime.UtcNow };
+                    part.Timestamp = new DateTimeField { Value = DateTime.UtcNow };
                 }
                 
-                part.JsonData = new TextField { Text = payloadObject.Data.ToString() };
+                part.JsonDocument = new TextField { Text = payloadObject.Data.ToString() };
             });
 
             await _contentManager.CreateAsync(newMessage);

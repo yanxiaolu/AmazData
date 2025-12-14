@@ -5,6 +5,6 @@ namespace AmazData.Module.Mqtt.Models;
 
 public class DataRecordPart : ContentPart
 {
-    public DateTimeField Time { get; set; } = new DateTimeField();
-    public TextField JsonData { get; set; } = new TextField();
+    public DateTimeField Timestamp { get; set; } = new DateTimeField();
+    public TextField JsonDocument { get; set; } = new TextField();
 }
