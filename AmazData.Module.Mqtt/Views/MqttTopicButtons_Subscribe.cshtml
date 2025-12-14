@@ -1,8 +1,48 @@
+@using AmazData.Module.Mqtt.Models
+@using AmazData.Module.Mqtt.Services
+@using OrchardCore.ContentManagement
+@using System.Linq
+
 @model AmazData.Module.Mqtt.Models.MqttBrokerButtonsViewModel
+
+@inject IContentManager ContentManager
+@inject IMqttSubscriptionManager SubscriptionManager
+
 @{
     if (Model.ContentItem == null)
     {
         return;
     }
+
+    // We need the latest version to get the relationships.
+    var contentItem = await ContentManager.GetAsync(Model.ContentItem.ContentItemId, VersionOptions.Latest);
+    if (contentItem == null)
+    {
+        return;
+    }
+
+    var topicPart = contentItem.As<TopicPart>();
+    var topicPattern = topicPart?.TopicPattern?.Text;
+    var brokerId = topicPart?.Broker?.ContentItemIds?.FirstOrDefault();
+
+    if (string.IsNullOrEmpty(topicPattern) || string.IsNullOrEmpty(brokerId))
+    {
+        // Don't render a button if the topic or its broker association is not fully configured.
+        <span class="text-muted small">未配置</span>
+        return;
+    }
+
+    var subscriptions = await SubscriptionManager.ListSubscriptionsAsync(brokerId);
+    var isSubscribed = subscriptions.Contains(topicPattern);
+
+    var buttonText = isSubscribed ? "取消订阅" : "订阅";
+    var buttonClass = isSubscribed ? "btn-warning" : "btn-success";
+    var actionName = isSubscribed ? "Unsubscribe" : "Subscribe";
 }
-<a asp-area="AmazData.Module.Mqtt" asp-controller="Subscription" asp-action="Subscribe" asp-route-topicId="@Model.ContentItem.ContentItemId" class="btn btn-sm btn-primary">订阅</a>
+
+<a asp-area="AmazData.Module.Mqtt"
+   asp-controller="MqttTopic"
+   asp-action="@actionName"
+   asp-route-topicId="@Model.ContentItem.ContentItemId"
+   class="btn btn-sm @buttonClass">@buttonText</a>
+
