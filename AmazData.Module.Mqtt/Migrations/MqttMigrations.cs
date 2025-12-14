@@ -34,6 +34,7 @@ public class MqttMigrations : DataMigration
 
         // 3. 定义 DataRecord 类型
         await _contentDefinitionsManager.AlterTypeDefinitionAsync("DataRecord", type => type
+            .WithPart("TitlePart")
             .WithPart("DataRecordPart")
             .Creatable()
             .Listable()
