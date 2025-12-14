@@ -1,0 +1,58 @@
+{
+  "name": "MQTT Admin Menu",
+  "displayName": "MQTT Management Menu",
+  "description": "Adds MQTT Broker and Topic management links to the admin dashboard.",
+  "author": "YourName",
+  "website": "",
+  "version": "1.0.0",
+  "issetuprecipe": false,
+  "categories": [ "MQTT" ],
+  "tags": [ "admin", "menu" ],
+  "steps": [
+    {
+      "name": "AdminMenu",
+      "data": [
+        {
+          "Name": "MQTT Management",
+          "Enabled": true,
+          "MenuItems": [
+            {
+              "$type": "OrchardCore.AdminMenu.AdminNodes.LinkAdminNode, OrchardCore.AdminMenu",
+              "LinkText": "MQTT 管理",
+              "LinkUrl": "#",
+              "IconClass": "fa-solid fa-microchip",
+              "Enabled": true,
+              "Priority": 10,
+              "LinkToFirstChild": true,
+              "LocalNav": false,
+              "Items": [
+                {
+                  "$type": "OrchardCore.AdminMenu.AdminNodes.LinkAdminNode, OrchardCore.AdminMenu",
+                  "LinkText": "Broker 连接管理",
+                  "LinkUrl": "~/Admin/Contents/ContentItems/Broker",
+                  "IconClass": "fa-solid fa-server",
+                  "Enabled": true,
+                  "Priority": 1,
+                  "LinkToFirstChild": false,
+                  "LocalNav": false,
+                  "Items": []
+                },
+                {
+                  "$type": "OrchardCore.AdminMenu.AdminNodes.LinkAdminNode, OrchardCore.AdminMenu",
+                  "LinkText": "Topic 订阅管理",
+                  "LinkUrl": "~/Admin/Contents/ContentItems/Topic",
+                  "IconClass": "fa-solid fa-tag",
+                  "Enabled": true,
+                  "Priority": 2,
+                  "LinkToFirstChild": false,
+                  "LocalNav": false,
+                  "Items": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
