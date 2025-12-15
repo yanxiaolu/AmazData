@@ -6,6 +6,7 @@ using OrchardCore.Title.Models;
 using YesSql;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Diagnostics;
 
 namespace AmazData.Module.Mqtt.Services;
 
@@ -38,6 +39,7 @@ public class BrokerService : IBrokerService
 
     public async Task CreateMessageRecordsAsync(string contentItemId, string topic, string payload)
     {
+        var stopwatch = Stopwatch.StartNew();
         try
         {
             var payloadObject = JsonSerializer.Deserialize<MqttJsonPayload>(payload);
@@ -68,15 +70,18 @@ public class BrokerService : IBrokerService
             await _contentManager.PublishAsync(newMessage);
             await _session.SaveChangesAsync();
 
-            _logger.LogDebug("Message recorded for Topic: {Topic}", topic);
+            stopwatch.Stop();
+            _logger.LogInformation("Message recorded for Topic: {Topic} in {ElapsedMs} ms", topic, stopwatch.Elapsed.TotalMilliseconds);
         }
         catch (JsonException jsonEx)
         {
-            _logger.LogError(jsonEx, "Failed to deserialize JSON payload for {Topic}. Payload: {Payload}", topic, payload);
+            stopwatch.Stop();
+            _logger.LogError(jsonEx, "Failed to deserialize JSON payload for {Topic}. Payload: {Payload}. Elapsed: {ElapsedMs} ms", topic, payload, stopwatch.Elapsed.TotalMilliseconds);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create message record for {Topic}", topic);
+            stopwatch.Stop();
+            _logger.LogError(ex, "Failed to create message record for {Topic}. Elapsed: {ElapsedMs} ms", topic, stopwatch.Elapsed.TotalMilliseconds);
             throw; // Re-throw to allow the background service to see the exception
         }
     }
