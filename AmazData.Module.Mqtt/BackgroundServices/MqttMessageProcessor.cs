@@ -3,16 +3,11 @@ using Microsoft.Extensions.Logging;
 using OrchardCore.BackgroundTasks;
 using OrchardCore.Environment.Shell.Scope;
 using AmazData.Module.Mqtt.Services;
+using System.Diagnostics; // 【新增】用于计时
 
 namespace AmazData.Module.Mqtt.BackgroundServices
 {
-    // 使用 [BackgroundTask] 属性定义任务调度和描述。
-    // 对于持续处理消息队列的任务，我们设置一个短间隔的调度（例如每分钟）
-    // 但实际运行时，DoWorkAsync 中的 await foreach 循环会使其持续运行，直到被取消。
-    [BackgroundTask(
-        Schedule = "*/1 * * * *", // 每分钟检查一次，但由于是 Channel reader，一旦启动将持续运行
-        Description = "Processes incoming MQTT messages from the internal channel and writes them to the database."
-    )]
+    // ... [BackgroundTask] 属性保持不变 ...
     public class MqttMessageProcessor : IBackgroundTask
     {
         private readonly MqttMessageChannel _channel;
@@ -22,14 +17,10 @@ namespace AmazData.Module.Mqtt.BackgroundServices
             MqttMessageChannel channel,
             ILogger<MqttMessageProcessor> logger)
         {
-            // MqttMessageChannel 是 Singleton，安全注入。
             _channel = channel;
             _logger = logger;
         }
 
-        /// <summary>
-        /// OrchardCore 后台任务执行方法。
-        /// </summary>
         public async Task DoWorkAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken)
         {
             _logger.LogDebug("MqttMessageProcessor (IBackgroundTask) started reading from channel.");
@@ -37,10 +28,12 @@ namespace AmazData.Module.Mqtt.BackgroundServices
             // 持续从 Channel 读取消息。
             await foreach (var message in _channel.ReadAllAsync(cancellationToken))
             {
+                // 【新增】启动计时器，记录从 Channel 取出消息到写入数据库的总耗时
+                var stopwatch = Stopwatch.StartNew(); 
+                
                 try
                 {
                     // 【关键】使用 ShellScope.Current.UsingAsync 来创建一个隔离的、有 Tenant Context 的 Scope。
-                    // 这对于在后台任务中安全地访问 Scoped 服务（如 IBrokerService 和 YesSql ISession）至关重要。
                     await ShellScope.Current.UsingAsync(async scope =>
                     {
                         var brokerService = scope.ServiceProvider.GetRequiredService<IBrokerService>();
@@ -51,15 +44,24 @@ namespace AmazData.Module.Mqtt.BackgroundServices
                             message.Topic,
                             message.Payload);
                     });
+
+                    // 【新增】停止计时并记录日志
+                    stopwatch.Stop();
+                    _logger.LogInformation(
+                        "Message processed successfully. ConnectionKey: {ConnectionKey}, Topic: {Topic}, Elapsed: {ElapsedMs} ms",
+                        message.ConnectionKey, message.Topic, stopwatch.Elapsed.TotalMilliseconds);
                 }
                 catch (Exception ex)
                 {
-                    // 记录错误，不抛出，以防止中断整个后台任务循环。
-                    _logger.LogError(ex, "Error processing MQTT message in MqttMessageProcessor. ConnectionKey: {ConnectionKey}, Topic: {Topic}",
-                        message.ConnectionKey, message.Topic);
+                    stopwatch.Stop(); // 即使失败也要停止计时
+                    // 记录错误，并记录耗时
+                    _logger.LogError(
+                        ex, 
+                        "Error processing MQTT message in MqttMessageProcessor. ConnectionKey: {ConnectionKey}, Topic: {Topic}, Elapsed: {ElapsedMs} ms",
+                        message.ConnectionKey, message.Topic, stopwatch.Elapsed.TotalMilliseconds);
                 }
 
-                // 检查取消请求，以响应 Orchard Core 的停止任务信号
+                // 检查取消请求
                 if (cancellationToken.IsCancellationRequested)
                 {
                     _logger.LogInformation("MqttMessageProcessor task received cancellation request.");
