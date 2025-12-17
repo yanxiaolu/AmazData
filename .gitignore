@@ -58,3 +58,7 @@ App_Data/
 OrchardCore.db
 .DS_Store
 .vs/
+/AmazData.Web/.config
+/AmazData.Web/Properties/PublishProfiles
+/AmazData.Web/AmazData.Web.csproj.user
+/package-lock.json

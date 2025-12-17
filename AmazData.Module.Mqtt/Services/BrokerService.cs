@@ -37,7 +37,7 @@ public class BrokerService : IBrokerService
         _logger = logger;
     }
 
-    public async Task CreateMessageRecordsAsync(string contentItemId, string topic, string payload)
+    public async Task CreateMessageRecordsAsync(string topic, string payload)
     {
         var stopwatch = Stopwatch.StartNew();
         try
@@ -68,7 +68,7 @@ public class BrokerService : IBrokerService
 
             await _contentManager.CreateAsync(newMessage);
             await _contentManager.PublishAsync(newMessage);
-            await _session.SaveChangesAsync();
+            //await _session.SaveChangesAsync();
 
             stopwatch.Stop();
             _logger.LogInformation("Message recorded for Topic: {Topic} in {ElapsedMs} ms", topic, stopwatch.Elapsed.TotalMilliseconds);
@@ -84,28 +84,5 @@ public class BrokerService : IBrokerService
             _logger.LogError(ex, "Failed to create message record for {Topic}. Elapsed: {ElapsedMs} ms", topic, stopwatch.Elapsed.TotalMilliseconds);
             throw; // Re-throw to allow the background service to see the exception
         }
-    }
-
-    public async Task UpdateConnectionStateAsync(string contentItemId, bool isConnected)
-    {
-        var contentItem = await _contentManager.GetAsync(contentItemId, VersionOptions.DraftRequired);
-
-        if (contentItem == null)
-        {
-            _logger.LogWarning("Broker {Id} not found.", contentItemId);
-            return;
-        }
-
-        contentItem.Alter<BrokerPart>(part =>
-        {
-            if (part.ConnectionState == null) part.ConnectionState = new BooleanField();
-            part.ConnectionState.Value = isConnected;
-        });
-
-        await _contentManager.UpdateAsync(contentItem);
-        await _contentManager.PublishAsync(contentItem);
-        await _session.SaveChangesAsync();
-
-        _logger.LogInformation("Broker {Id} state updated to: {State}", contentItemId, isConnected);
     }
 }

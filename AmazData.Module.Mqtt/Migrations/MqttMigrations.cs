@@ -62,19 +62,6 @@ public class MqttMigrations : DataMigration
                     Required = true
                 }))
 
-            // --- 重构开始: ConnectionState 改为 BooleanField ---
-            .WithField("ConnectionState", field => field
-                .OfType("BooleanField") // 类型改为布尔值
-                .WithDisplayName("Connection State")
-                .WithEditor("Switch") // 使用 "Switch" 编辑器，显示为开关样式
-                .WithSettings(new BooleanFieldSettings
-                {
-                    Label = "Connected", // 当开关打开(True)时的标签
-                    Hint = "Indicates if the broker is currently connected.",
-                    DefaultValue = false // 默认为断开
-                }))
-            // --- 重构结束 ---
-
             .WithField("Qos", field => field
                 .OfType("MultiTextField") // 注意：建议生产环境改用 TextField + PredefinedList，这里保留原类型但修复语法
                 .WithDisplayName("QoS Level")

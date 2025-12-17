@@ -3,7 +3,8 @@ using Microsoft.Extensions.Logging;
 using OrchardCore.BackgroundTasks;
 using OrchardCore.Environment.Shell.Scope;
 using AmazData.Module.Mqtt.Services;
-using System.Diagnostics; 
+using System.Diagnostics;
+using YesSql;
 
 namespace AmazData.Module.Mqtt.BackgroundServices
 {
@@ -27,6 +28,8 @@ namespace AmazData.Module.Mqtt.BackgroundServices
         /// </summary>
         private readonly ILogger<MqttMessageProcessor> _logger;
 
+        private readonly ISession _session;
+
         /// <summary>
         /// 构造函数，通过依赖注入获取 MqttMessageChannel 和 ILogger 实例。
         /// </summary>
@@ -34,10 +37,12 @@ namespace AmazData.Module.Mqtt.BackgroundServices
         /// <param name="logger">日志记录器。</param>
         public MqttMessageProcessor(
             MqttMessageChannel channel,
+            ISession session,
             ILogger<MqttMessageProcessor> logger)
         {
             _channel = channel;
             _logger = logger;
+            _session = session;
         }
 
         /// <summary>
@@ -72,7 +77,6 @@ namespace AmazData.Module.Mqtt.BackgroundServices
 
                         // 调用服务将 MQTT 消息写入数据库。
                         await brokerService.CreateMessageRecordsAsync(
-                            message.ConnectionKey,
                             message.Topic,
                             message.Payload);
 
@@ -93,7 +97,7 @@ namespace AmazData.Module.Mqtt.BackgroundServices
                     }
                 });
             }
-
+            await _session.SaveChangesAsync();
             _logger.LogDebug("MqttMessageProcessor 批处理任务执行完毕。");
         }
     }

@@ -30,18 +30,25 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
         _messageChannel = messageChannel;
         _clientFactory = new MqttClientFactory();
     }
+    
+    public bool IsConnected(string key)
+    {
+        return _clients.TryGetValue(key, out var client) && client.IsConnected;
+    }
 
     public async Task<bool> ConnectAsync(BrokerConfig config)
     {
+        // 检查是否已连接
         if (_clients.TryGetValue(config.Key, out var existingClient) && existingClient.IsConnected)
         {
             return true;
         }
 
+        // 创建新客户端
         var client = _clientFactory.CreateMqttClient();
         _subscriptions.TryAdd(config.Key, new ConcurrentBag<string>());
 
-        // 构建 Options (省略部分代码，与原版一致，建议提取为 private helper method)
+        // 构建 Options
         var options = new MqttClientOptionsBuilder()
             .WithTcpServer(config.Host, config.Port)
             .WithClientId(string.IsNullOrEmpty(config.ClientId) ? Guid.NewGuid().ToString() : config.ClientId)
@@ -50,39 +57,48 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
 
         if (!string.IsNullOrEmpty(config.Username)) options.WithCredentials(config.Username, config.Password);
 
-        // --- 事件处理 ---
+        // --- 事件处理 (已添加异常处理) ---
 
         client.ApplicationMessageReceivedAsync += async e =>
         {
-            var payloadStr = e.ApplicationMessage.ConvertPayloadToString();
-            var eventArgs = new BrokerMessageEventArgs(config.Key, e.ApplicationMessage.Topic, payloadStr);
-
-            // 1. 触发 C# 事件 (给实时 UI 或 SignalR 使用)
-            OnMessageReceived?.Invoke(this, eventArgs);
-
-            // 2. 【核心变化】写入 Channel，而不是直接写库
-            // 这是一个极快的内存操作，不会阻塞 MQTT 线程
-            if (!_messageChannel.TryWrite(eventArgs))
+            // 【核心修改】顶层 try-catch 包裹，防止回调中的异常导致应用崩溃
+            try
             {
-                _logger.LogWarning("Failed to write message to channel. Queue might be full.");
-            }
+                var payloadStr = e.ApplicationMessage.ConvertPayloadToString();
+                var eventArgs = new BrokerMessageEventArgs(config.Key, e.ApplicationMessage.Topic, payloadStr);
 
-            _logger.LogDebug("[{Key}] Enqueued message from {Topic}", config.Key, e.ApplicationMessage.Topic);
+                // 1. 触发 C# 事件
+                // 注意：如果订阅者逻辑中有未捕获异常，也会被外层 catch 捕获，保护 MQTT 连接
+                OnMessageReceived?.Invoke(this, eventArgs);
+
+                // 2. 写入 Channel
+                if (!_messageChannel.TryWrite(eventArgs))
+                {
+                    _logger.LogWarning("[{Key}] Failed to write message to channel. Queue might be full.", config.Key);
+                }
+
+                _logger.LogDebug("[{Key}] Enqueued message from {Topic}", config.Key, e.ApplicationMessage.Topic);
+            }
+            catch (Exception ex)
+            {
+                // 记录详细错误信息，包括出错的主题，方便排查
+                _logger.LogError(ex,
+                    "[{Key}] Error processing MQTT message. Topic: {Topic}",
+                    config.Key,
+                    e.ApplicationMessage?.Topic ?? "Unknown");
+            }
 
             await Task.CompletedTask;
         };
 
-        client.DisconnectedAsync += async e =>
+        client.DisconnectedAsync += e =>
         {
             _logger.LogWarning("[{Key}] Disconnected: {Reason}", config.Key, e.Reason);
             _subscriptions.TryRemove(config.Key, out _);
-            if (e.ClientWasConnected)
-            {
-                // 状态更新频率低，可以直接在这里用 Scope
-                await UpdateDbStateAsync(config.Key, false);
-            }
+            return Task.CompletedTask;
         };
 
+        // --- 连接逻辑 ---
         try
         {
             var result = await client.ConnectAsync(options.Build());
@@ -90,9 +106,6 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
             if (result.ResultCode == MqttClientConnectResultCode.Success)
             {
                 _clients.AddOrUpdate(config.Key, client, (k, old) => { old.Dispose(); return client; });
-                // 这里建议由 Controller 调用 UpdateDbStateAsync(true)，或者保留在这里
-                // 如果保留在这里，确保 UpdateDbStateAsync 内部使用了 CommitAsync
-                await UpdateDbStateAsync(config.Key, true);
                 return true;
             }
             return false;
@@ -182,7 +195,6 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
                 await client.DisconnectAsync(new MqttClientDisconnectOptionsBuilder().WithReason(MqttClientDisconnectOptionsReason.NormalDisconnection).Build());
             }
             _subscriptions.TryRemove(key, out _);
-            await UpdateDbStateAsync(key, false);
             client.Dispose();
         }
     }
@@ -194,13 +206,6 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
             return client;
         }
         throw new InvalidOperationException($"客户端 [{key}] 未找到或未连接。请先调用 ConnectAsync。");
-    }
-    private async Task UpdateDbStateAsync(string brokerId, bool isConnected)
-    {
-        using var scope = _scopeFactory.CreateScope();
-        var updater = scope.ServiceProvider.GetRequiredService<IBrokerService>();
-        // BrokerService 内部已经有了 CommitAsync，所以这里 await 即可
-        await updater.UpdateConnectionStateAsync(brokerId, isConnected);
     }
     public void Dispose()
     {

@@ -87,10 +87,5 @@ namespace AmazData.Module.Mqtt.Services
         {
             return await _connectionManager.GetSubscriptionsAsync(brokerItemId);
         }
-
-        public Task<long> GetMessageStatsAsync(string brokerItemId)
-        {
-            throw new System.NotImplementedException();
-        }
     }
 }
