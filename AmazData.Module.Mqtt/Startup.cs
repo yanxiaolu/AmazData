@@ -37,7 +37,6 @@ public sealed class Startup : StartupBase
         // 注册 Content Display Driver 以添加按钮
         services.AddScoped<IContentDisplayDriver, MqttBrokerButtonsDisplayDriver>();
         services.AddScoped<IContentDisplayDriver, MqttTopicButtonsDisplayDriver>();
-        services.AddScoped<IDisplayDriver<User>, AmazDataMqttUserButtonDisplayDriver>();
 
         // 注册后台任务
         services.AddScoped<IBackgroundTask, MqttMessageProcessor>();
