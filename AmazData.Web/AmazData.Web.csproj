@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../AmazData.Module.Mqtt/AmazData.Module.Mqtt.csproj" />
+    <ProjectReference Include="../AmazData.Module.Yunmou/AmazData.Module.Yunmou.csproj" />
   </ItemGroup>
 
 </Project>
