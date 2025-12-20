@@ -1,9 +1,12 @@
+using AmazData.Module.Yunmou.Migrations;
 using AmazData.Module.Yunmou.Models;
 using AmazData.Module.Yunmou.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OrchardCore.ContentManagement;
+using OrchardCore.Data.Migration;
 using OrchardCore.Modules;
 
 namespace AmazData.Module.Yunmou;
@@ -29,6 +32,11 @@ public sealed class Startup : StartupBase
         services.Configure<YunMouSettings>(_configuration.GetSection("YunMou"));
         // 注册 HttpClient 客户端
         services.AddHttpClient<IYunMouApiClient, YunMouApiClient>();
+        services.AddHttpClient<IYunMouTokenService, YunMouTokenService>();
+
+        // 注册内容部件和迁移
+        services.AddContentPart<YuMouKeyManagePart>();
+        services.AddDataMigration<YunMouMigrations>();
     }
 
     /// <summary>
