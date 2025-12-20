@@ -1,17 +1,25 @@
 namespace AmazData.Module.Yunmou.Models;
 
 /// <summary>
-/// 云眸 API 配置设置
+/// 云眸 API 配置选项
 /// </summary>
 public class YunMouSettings
 {
     /// <summary>
-    /// API 基础地址 (例如: https://api2.hik-cloud.com)
+    /// 云眸 API 基础地址
+    /// 已迁移至 appsettings.json 中配置 "YunMou": { "BaseUrl": "..." }
     /// </summary>
-    public string BaseUrl { get; set; } = "https://api2.hik-cloud.com";
+    public string BaseUrl { get; set; } = string.Empty;
 
     /// <summary>
-    /// 访问令牌 (Token)
+    /// 获取直播地址的 API 端点路径
+    /// 已迁移至 appsettings.json 中配置 "YunMou": { "LiveAddressEndpoint": "..." }
     /// </summary>
-    public string? AccessToken { get; set; } = "1354e20b-8498-4cd9-b6d1-9dec9d3d3ea3";
+    public string LiveAddressEndpoint { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 访问令牌 (Access Token)
+    /// 建议通过云眸后台内容管理或动态获取。
+    /// </summary>
+    public string? AccessToken { get; set; }
 }
