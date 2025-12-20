@@ -62,3 +62,4 @@ OrchardCore.db
 /AmazData.Web/Properties/PublishProfiles
 /AmazData.Web/AmazData.Web.csproj.user
 /package-lock.json
+AmazData.sln.DotSettings.user
