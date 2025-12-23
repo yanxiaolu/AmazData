@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="AmazData.Module.Mqtt/AmazData.Module.Mqtt.csproj" />
+  <Project Path="AmazData.Module.PlcStat/AmazData.Module.PlcStat.csproj" />
   <Project Path="AmazData.Module.Yunmou/AmazData.Module.Yunmou.csproj" />
   <Project Path="AmazData.Web/AmazData.Web.csproj" />
 </Solution>
