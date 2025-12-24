@@ -2,23 +2,13 @@ using Microsoft.Extensions.Configuration;
 
 namespace AmazData.Module.PlcStat.Services;
 
+/// <summary>
+/// PostgreSQL 连接提供者接口
+/// </summary>
 public interface IPostgreSqlConnectionProvider
 {
+    /// <summary>
+    /// 获取数据库连接字符串
+    /// </summary>
     string GetConnectionString();
-}
-public class PostgreSqlConnectionProvider : IPostgreSqlConnectionProvider
-{
-    private readonly IConfiguration _configuration;
-
-    public PostgreSqlConnectionProvider(IConfiguration configuration)
-    {
-        _configuration = configuration;
-    }
-
-    public string GetConnectionString()
-    {
-        // 需要替换为你的实际连接字符串键名
-        return _configuration.GetConnectionString("PostgreSqlConnection") 
-               ?? throw new InvalidOperationException("PostgreSqlConnection connection string not found.");
-    }
 }
