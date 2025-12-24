@@ -1,54 +1,75 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Dapper;
-using Npgsql;
+using Microsoft.Extensions.Logging;
 using AmazData.Module.PlcStat.Services;
 using AmazData.Module.PlcStat.Models;
 using System.Collections.Generic;
 
 namespace AmazData.Module.PlcStat.Controllers;
 
+/// <summary>
+/// PLC 数据控制器
+/// </summary>
 public sealed class PlcDataController : Controller
 {
-    private readonly IPostgreSqlConnectionProvider _connectionProvider;
+    // 重构：注入仓储接口，替代直接的数据库连接提供者
+    private readonly IPlcDataRepository _repository;
+    // 新增：注入日志记录器
+    private readonly ILogger<PlcDataController> _logger;
 
-    public PlcDataController(IPostgreSqlConnectionProvider connectionProvider)
+    public PlcDataController(IPlcDataRepository repository, ILogger<PlcDataController> logger)
     {
-        _connectionProvider = connectionProvider;
+        _repository = repository;
+        _logger = logger;
     }
 
+    /// <summary>
+    /// 默认视图页面
+    /// </summary>
+    /// <returns>视图结果</returns>
     public ActionResult Index()
     {
         return View();
     }
 
+    /// <summary>
+    /// 获取 PLC 数据记录总数
+    /// </summary>
+    /// <returns>包含记录总数的 JSON 对象</returns>
     [Route("api/plcstat/count")]
     [HttpGet]
     public async Task<IActionResult> GetCount()
     {
         try
         {
-            var connectionString = _connectionProvider.GetConnectionString();
-            using var connection = new NpgsqlConnection(connectionString);
-            
-            // Open the connection asynchronously
-            await connection.OpenAsync();
-
-            var count = await Dapper.SqlMapper.ExecuteScalarAsync<long>(connection, "SELECT COUNT(*) FROM public.plcdata_hourly_rollup");
+            // 重构：调用仓储层方法获取数据
+            var count = await _repository.GetRecordCountAsync();
 
             return Json(new { count });
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { error = ex.Message });
+            // 安全性改进：记录详细异常日志，但仅向客户端返回通用错误信息
+            _logger.LogError(ex, "Error occurred while getting record count.");
+            return StatusCode(500, new { error = "An internal error occurred." });
         }
     }
 
+    /// <summary>
+    /// 获取传感器趋势数据
+    /// </summary>
+    /// <param name="request">趋势数据请求参数</param>
+    /// <returns>趋势数据点列表</returns>
     [Route("api/plcstat/trend")]
     [HttpGet]
     public async Task<IActionResult> GetTrend([FromQuery] TrendRequest request)
     {
+        if (string.IsNullOrWhiteSpace(request.DeviceId))
+        {
+            return BadRequest(new { error = "DeviceId is required." });
+        }
+
         if (string.IsNullOrWhiteSpace(request.SensorName))
         {
             return BadRequest(new { error = "SensorName is required." });
@@ -61,53 +82,18 @@ public sealed class PlcDataController : Controller
 
         try
         {
-            var connectionString = _connectionProvider.GetConnectionString();
-            using var connection = new NpgsqlConnection(connectionString);
-            await connection.OpenAsync();
-
-            string sql;
             var startTime = DateTime.UtcNow.AddDays(-request.Days);
             
-            // Normalize granularity to lowercase for comparison
-            var granularity = request.Granularity?.ToLower() ?? "day";
-
-            if (granularity == "hour")
-            {
-                // Fetch hourly data directly (assuming the table is already hourly rollups)
-                sql = @"
-                    SELECT 
-                        time as Time, 
-                        sensor_value as Value
-                    FROM public.plcdata_hourly_rollup
-                    WHERE sensor_name = @SensorName 
-                      AND time >= @StartTime
-                    ORDER BY time ASC";
-            }
-            else // Default to Day
-            {
-                // Aggregate by Day
-                sql = @"
-                    SELECT 
-                        date_trunc('day', time) as Time, 
-                        AVG(sensor_value) as Value
-                    FROM public.plcdata_hourly_rollup
-                    WHERE sensor_name = @SensorName 
-                      AND time >= @StartTime
-                    GROUP BY 1
-                    ORDER BY 1 ASC";
-            }
-
-            var result = await Dapper.SqlMapper.QueryAsync<TrendDataPoint>(
-                connection, 
-                sql, 
-                new { request.SensorName, StartTime = startTime }
-            );
+            // 重构：业务逻辑（如粒度处理）和数据访问逻辑已移至仓储层
+            var result = await _repository.GetSensorTrendAsync(request.DeviceId, request.SensorName, startTime, request.Granularity);
 
             return Json(result);
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { error = ex.Message });
+            // 安全性改进：记录详细异常日志，但仅向客户端返回通用错误信息
+            _logger.LogError(ex, "Error occurred while getting sensor trend for {DeviceId} - {SensorName}.", request.DeviceId, request.SensorName);
+            return StatusCode(500, new { error = "An internal error occurred." });
         }
     }
 }
