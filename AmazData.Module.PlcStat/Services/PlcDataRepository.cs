@@ -47,9 +47,18 @@ public class PlcDataRepository : IPlcDataRepository
     }
 
     /// <summary>
-    /// 异步获取传感器趋势数据
+    /// 异步获取传感器趋势数据 (回溯模式)
     /// </summary>
-    public async Task<IEnumerable<TrendDataPoint>> GetSensorTrendAsync(string deviceId, string sensorName, DateTime startTime, string granularity)
+    public Task<IEnumerable<TrendDataPoint>> GetSensorTrendAsync(string deviceId, string sensorName, DateTime startTime, string granularity)
+    {
+        // 默认查询到当前时间
+        return GetSensorTrendRangeAsync(deviceId, sensorName, startTime, DateTime.UtcNow, granularity);
+    }
+
+    /// <summary>
+    /// 异步获取指定时间范围内的传感器趋势数据
+    /// </summary>
+    public async Task<IEnumerable<TrendDataPoint>> GetSensorTrendRangeAsync(string deviceId, string sensorName, DateTime startTime, DateTime endTime, string granularity)
     {
         using var connection = GetConnection();
         await connection.OpenAsync();
@@ -69,6 +78,7 @@ public class PlcDataRepository : IPlcDataRepository
                 WHERE device_id = @DeviceId
                   AND sensor_name = @SensorName 
                   AND hour_time >= @StartTime
+                  AND hour_time <= @EndTime
                 ORDER BY hour_time ASC";
         }
         else // 默认为 "day"
@@ -82,13 +92,14 @@ public class PlcDataRepository : IPlcDataRepository
                 WHERE device_id = @DeviceId
                   AND sensor_name = @SensorName 
                   AND hour_time >= @StartTime
+                  AND hour_time <= @EndTime
                 GROUP BY 1
                 ORDER BY 1 ASC";
         }
 
         return await connection.QueryAsync<TrendDataPoint>(
             sql, 
-            new { DeviceId = deviceId, SensorName = sensorName, StartTime = startTime }
+            new { DeviceId = deviceId, SensorName = sensorName, StartTime = startTime, EndTime = endTime }
         );
     }
 }

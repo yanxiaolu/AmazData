@@ -69,6 +69,31 @@
    GET /api/plcstat/trend?DeviceId=ZTData&SensorName=FT_YBB0002_L&Days=3&Granularity=Hour
    ```
 
+### 3. 获取指定范围传感器趋势数据
+
+根据设备ID、传感器名称、自定义起止时间和粒度查询趋势数据。
+
+- **接口地址**: `/api/plcstat/trend-range`
+- **请求方式**: `GET`
+
+**请求参数 (Query Parameters)**:
+
+| 参数名 | 类型 | 必填 | 默认值 | 说明 |
+| :--- | :--- | :--- | :--- | :--- |
+| `DeviceId` | string | 是 | - | 设备 ID |
+| `SensorName` | string | 是 | - | 传感器名称 |
+| `StartTime` | DateTime | 是 | - | 开始时间 (ISO 8601 格式, 如 `2025-12-01`) |
+| `EndTime` | DateTime | 是 | - | 截止时间 (ISO 8601 格式, 如 `2025-12-07`) |
+| `Granularity` | string | 否 | `Day` | 数据粒度。可选值: `Hour`, `Day` |
+
+**响应示例**: 同上。
+
+**调用示例 URL**:
+
+```
+GET /api/plcstat/trend-range?DeviceId=ZTData&SensorName=FT_YBB0002_L&StartTime=2025-12-01&EndTime=2025-12-07&Granularity=Day
+```
+
 ---
 
 ## AmazData.Module.Yunmou API 接口说明

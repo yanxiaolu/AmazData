@@ -41,11 +41,13 @@ public sealed class PlcDataController : Controller
     [HttpGet]
     public async Task<IActionResult> GetCount()
     {
+        _logger.LogInformation("Received request to get total record count.");
         try
         {
             // 重构：调用仓储层方法获取数据
             var count = await _repository.GetRecordCountAsync();
 
+            _logger.LogInformation("Successfully retrieved record count: {Count}", count);
             return Json(new { count });
         }
         catch (Exception ex)
@@ -65,35 +67,95 @@ public sealed class PlcDataController : Controller
     [HttpGet]
     public async Task<IActionResult> GetTrend([FromQuery] TrendRequest request)
     {
+        _logger.LogInformation("Received request for sensor trend. Device: {DeviceId}, Sensor: {SensorName}, Days: {Days}, Granularity: {Granularity}", 
+            request.DeviceId, request.SensorName, request.Days, request.Granularity);
+
         if (string.IsNullOrWhiteSpace(request.DeviceId))
         {
+            _logger.LogWarning("GetTrend failed: DeviceId is required.");
             return BadRequest(new { error = "DeviceId is required." });
         }
 
         if (string.IsNullOrWhiteSpace(request.SensorName))
         {
+            _logger.LogWarning("GetTrend failed: SensorName is required.");
             return BadRequest(new { error = "SensorName is required." });
         }
 
         if (request.Days <= 0)
         {
+            _logger.LogWarning("GetTrend failed: Days must be greater than 0. Received: {Days}", request.Days);
             return BadRequest(new { error = "Days must be greater than 0." });
         }
 
         try
         {
             var startTime = DateTime.UtcNow.AddDays(-request.Days);
-            
-            // 重构：业务逻辑（如粒度处理）和数据访问逻辑已移至仓储层
+
+            // 调用重构后的仓储层方法
             var result = await _repository.GetSensorTrendAsync(request.DeviceId, request.SensorName, startTime, request.Granularity);
 
+            _logger.LogInformation("Successfully retrieved sensor trend for {DeviceId} - {SensorName}.", request.DeviceId, request.SensorName);
             return Json(result);
         }
         catch (Exception ex)
         {
-            // 安全性改进：记录详细异常日志，但仅向客户端返回通用错误信息
             _logger.LogError(ex, "Error occurred while getting sensor trend for {DeviceId} - {SensorName}.", request.DeviceId, request.SensorName);
             return StatusCode(500, new { error = "An internal error occurred." });
         }
     }
-}
+
+    /// <summary>
+    /// 获取指定时间范围内的传感器趋势数据
+    /// </summary>
+    /// <param name="request">范围请求参数</param>
+    /// <returns>趋势数据点列表</returns>
+    [Route("api/plcstat/trend-range")]
+    [HttpGet]
+    public async Task<IActionResult> GetTrendRange([FromQuery] TrendRangeRequest request)
+    {
+        _logger.LogInformation("Received request for sensor trend range. Device: {DeviceId}, Sensor: {SensorName}, Start: {StartTime}, End: {EndTime}, Granularity: {Granularity}",
+            request.DeviceId, request.SensorName, request.StartTime, request.EndTime, request.Granularity);
+
+        if (string.IsNullOrWhiteSpace(request.DeviceId))
+        {
+            _logger.LogWarning("GetTrendRange failed: DeviceId is required.");
+            return BadRequest(new { error = "DeviceId is required." });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.SensorName))
+        {
+            _logger.LogWarning("GetTrendRange failed: SensorName is required.");
+            return BadRequest(new { error = "SensorName is required." });
+        }
+
+        if (!request.StartTime.HasValue || !request.EndTime.HasValue)
+        {
+            _logger.LogWarning("GetTrendRange failed: StartTime and EndTime are required.");
+            return BadRequest(new { error = "StartTime and EndTime are required." });
+        }
+
+        if (request.StartTime > request.EndTime)
+        {
+            _logger.LogWarning("GetTrendRange failed: StartTime ({StartTime}) is after EndTime ({EndTime}).", request.StartTime, request.EndTime);
+            return BadRequest(new { error = "StartTime must be before EndTime." });
+        }
+
+        try
+        {
+            var result = await _repository.GetSensorTrendRangeAsync(
+                request.DeviceId, 
+                request.SensorName, 
+                request.StartTime.Value, 
+                request.EndTime.Value, 
+                request.Granularity);
+
+            _logger.LogInformation("Successfully retrieved sensor trend range for {DeviceId} - {SensorName}.", request.DeviceId, request.SensorName);
+            return Json(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error occurred while getting sensor trend range for {DeviceId} - {SensorName}.", request.DeviceId, request.SensorName);
+            return StatusCode(500, new { error = "An internal error occurred." });
+        }
+    }}

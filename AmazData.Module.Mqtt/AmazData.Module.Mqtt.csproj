@@ -13,6 +13,11 @@
 
   <ItemGroup>
 
+    <PackageReference Include="Lombiq.Analyzers" Version="5.2.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+
     <PackageReference Include="MQTTnet" Version="5.0.1.1416" />
 
     <PackageReference Include="OrchardCore.ContentFields" Version="2.2.1" />

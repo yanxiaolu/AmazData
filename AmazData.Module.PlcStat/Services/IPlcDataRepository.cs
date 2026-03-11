@@ -17,7 +17,7 @@ public interface IPlcDataRepository
     Task<long> GetRecordCountAsync();
 
     /// <summary>
-    /// 获取传感器趋势数据
+    /// 获取传感器趋势数据 (从开始时间到当前时间)
     /// </summary>
     /// <param name="deviceId">设备ID</param>
     /// <param name="sensorName">传感器名称</param>
@@ -25,4 +25,15 @@ public interface IPlcDataRepository
     /// <param name="granularity">粒度 ("hour" 或 "day")</param>
     /// <returns>趋势数据点集合</returns>
     Task<IEnumerable<TrendDataPoint>> GetSensorTrendAsync(string deviceId, string sensorName, DateTime startTime, string granularity);
+
+    /// <summary>
+    /// 获取指定时间范围内的传感器趋势数据
+    /// </summary>
+    /// <param name="deviceId">设备ID</param>
+    /// <param name="sensorName">传感器名称</param>
+    /// <param name="startTime">开始时间</param>
+    /// <param name="endTime">截止时间</param>
+    /// <param name="granularity">粒度 ("hour" 或 "day")</param>
+    /// <returns>趋势数据点集合</returns>
+    Task<IEnumerable<TrendDataPoint>> GetSensorTrendRangeAsync(string deviceId, string sensorName, DateTime startTime, DateTime endTime, string granularity);
 }

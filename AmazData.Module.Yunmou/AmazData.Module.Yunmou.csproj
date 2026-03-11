@@ -12,6 +12,10 @@
     </ItemGroup>
 
     <ItemGroup>
+        <PackageReference Include="Lombiq.Analyzers" Version="5.2.0">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
         <PackageReference Include="OrchardCore.Module.Targets" Version="2.2.1"/>
         <PackageReference Include="OrchardCore.ContentManagement" Version="2.2.1"/>
         <PackageReference Include="OrchardCore.ContentTypes.Abstractions" Version="2.2.1"/>

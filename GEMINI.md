@@ -1,54 +1,50 @@
 # AmazData Project Overview
 
-This repository contains the source code for the **AmazData** project, a .NET 8.0 C# solution. The core of the project is an **Orchard Core CMS** application (`AmazData.Web`) extended with a custom module (`AmazData.Module.Mqtt`) for MQTT (Message Queuing Telemetry Transport) data integration.
+This repository contains the source code for the **AmazData** project, a .NET 8.0 C# solution. The core of the project is an **Orchard Core CMS** application (`AmazData.Web`) extended with custom modules for data integration and processing.
 
 ## Project Structure
 
-*   **`AmazData.Web`**: The main Orchard Core CMS application. It serves as the entry point for the web application and hosts the custom MQTT module.
-*   **`AmazData.Module.Mqtt`**: A custom Orchard Core module responsible for handling MQTT communication. It utilizes the `MQTTnet` library for MQTT client functionalities.
-*   **`ConsoleApp1`**: A simple console application, likely used for testing or utility purposes.
+*   **`AmazData.Web`**: The main Orchard Core CMS application. It serves as the entry point for the web application and hosts custom modules.
+*   **`AmazData.Module.Mqtt`**: Custom Orchard Core module for handling MQTT communication using `MQTTnet`.
+*   **`AmazData.Module.PlcStat`**: Provides RESTful APIs for querying PLC historical data and statistics from PostgreSQL.
+*   **`AmazData.Module.Yunmou`**: Integration with Hikvision Yunmou (海康云眸) for video stream management.
+*   **`ConsoleApp1`**: Utility console application.
 
 ## Key Technologies
 
-*   **C#**: The primary programming language.
-*   **.NET 8.0**: The target framework for all projects.
-*   **ASP.NET Core**: The web framework used by `AmazData.Web`.
-*   **Orchard Core CMS**: A free, open-source, modular, and extensible CMS framework built on ASP.NET Core.
-*   **MQTTnet**: A high-performance .NET library for MQTT client and server communication, used within `AmazData.Module.Mqtt`.
-*   **NLog**: A flexible and free .NET logging platform, used for application logging.
+*   **C# / .NET 8.0**: Primary language and framework.
+*   **Orchard Core CMS**: Modular and extensible CMS framework.
+*   **MQTTnet**: High-performance MQTT library.
+*   **Npgsql**: PostgreSQL data provider for .NET.
+*   **NLog**: Flexible logging platform.
+
+## Key API Endpoints
+
+### PlcStat Module
+*   **`GET /api/plcstat/count`**: Returns the total record count in the database.
+*   **`GET /api/plcstat/trend`**: Retrieves sensor trend data (last N days).
+    *   Parameters: `DeviceId`, `SensorName`, `Days` (default 7), `Granularity` (`Hour`|`Day`).
+*   **`GET /api/plcstat/trend-range`**: Retrieves sensor trend data for a specific date range.
+    *   Parameters: `DeviceId`, `SensorName`, `StartTime`, `EndTime`, `Granularity` (`Hour`|`Day`).
+
+### Yunmou Module
+*   **`GET /api/yunmou/video`**: Retrieves HLS live stream addresses.
+    *   Parameters: `deviceSerial`, `channelNo` (default 1).
+    *   *Note: Requires `YuMouKeyManage` content item configuration in the CMS.*
 
 ## Building and Running
 
 ### Prerequisites
-
 *   .NET 8.0 SDK installed.
 
-### Build the Project
-
-To build the entire solution, navigate to the root directory of the repository and execute:
-
+### Build and Run
 ```bash
 dotnet build
-```
-
-### Run the Web Application
-
-To run the `AmazData.Web` application, execute the following command from the root directory:
-
-```bash
 dotnet run --project AmazData.Web
 ```
 
-For development with hot-reloading, you can use:
-
-```bash
-dotnet watch run --project AmazData.Web
-```
-
-Upon the first run, the Orchard Core CMS setup screen will be displayed in your browser. Follow the instructions to configure your site.
-
 ## Development Conventions
 
-*   Follows standard .NET/C# coding conventions and best practices.
-*   Orchard Core module development guidelines are applied for the `AmazData.Module.Mqtt` project.
-*   Implicit usings and nullable reference types are enabled.
+*   Follows standard .NET/C# coding conventions.
+*   Orchard Core module development guidelines.
+*   Implicit usings and nullable reference types enabled.
