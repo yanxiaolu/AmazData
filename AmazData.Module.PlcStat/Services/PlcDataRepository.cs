@@ -49,16 +49,16 @@ public class PlcDataRepository : IPlcDataRepository
     /// <summary>
     /// 异步获取传感器趋势数据 (回溯模式)
     /// </summary>
-    public Task<IEnumerable<TrendDataPoint>> GetSensorTrendAsync(string deviceId, string sensorName, DateTime startTime, string granularity)
+    public Task<IEnumerable<TrendDataPoint>> GetSensorTrendAsync(string deviceId, string sensorName, DateTimeOffset startTime, string granularity)
     {
         // 默认查询到当前时间
-        return GetSensorTrendRangeAsync(deviceId, sensorName, startTime, DateTime.UtcNow, granularity);
+        return GetSensorTrendRangeAsync(deviceId, sensorName, startTime, DateTimeOffset.UtcNow, granularity);
     }
 
     /// <summary>
     /// 异步获取指定时间范围内的传感器趋势数据
     /// </summary>
-    public async Task<IEnumerable<TrendDataPoint>> GetSensorTrendRangeAsync(string deviceId, string sensorName, DateTime startTime, DateTime endTime, string granularity)
+    public async Task<IEnumerable<TrendDataPoint>> GetSensorTrendRangeAsync(string deviceId, string sensorName, DateTimeOffset startTime, DateTimeOffset endTime, string granularity)
     {
         using var connection = GetConnection();
         await connection.OpenAsync();
@@ -69,10 +69,10 @@ public class PlcDataRepository : IPlcDataRepository
 
         if (normalizedGranularity == "hour")
         {
-            // 按小时获取数据 (假设表已经是小时级汇总)
+            // 按小时获取数据，并将输出转换为北京时间
             sql = $@"
                 SELECT 
-                    to_char(hour_time, 'YYYY-MM-DD HH24:MI:SS') as Time, 
+                    to_char(hour_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD HH24:MI:SS') as Time, 
                     avg_value as Value
                 FROM {TableName}
                 WHERE device_id = @DeviceId
@@ -83,10 +83,10 @@ public class PlcDataRepository : IPlcDataRepository
         }
         else // 默认为 "day"
         {
-            // 按天聚合数据
+            // 按天聚合数据，确保“天”的边界对齐北京时间零点
             sql = $@"
                 SELECT 
-                    to_char(date_trunc('day', hour_time), 'YYYY-MM-DD') as Time, 
+                    to_char(date_trunc('day', hour_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Shanghai'), 'YYYY-MM-DD') as Time, 
                     AVG(avg_value) as Value
                 FROM {TableName}
                 WHERE device_id = @DeviceId

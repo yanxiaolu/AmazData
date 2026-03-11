@@ -47,12 +47,12 @@ public class TrendRangeRequest
     /// <summary>
     /// 开始时间
     /// </summary>
-    public DateTime? StartTime { get; set; }
+    public DateTimeOffset? StartTime { get; set; }
 
     /// <summary>
     /// 截止时间
     /// </summary>
-    public DateTime? EndTime { get; set; }
+    public DateTimeOffset? EndTime { get; set; }
 
     /// <summary>
     /// 数据粒度: "Hour" (小时) 或 "Day" (天)

@@ -82,14 +82,15 @@ public sealed class PlcDataController : Controller
             return BadRequest(new { error = "SensorName is required." });
         }
 
-        if (request.Days <= 0)
+        if (request.Days <= 0 || request.Days > 30)
         {
-            _logger.LogWarning("GetTrend failed: Days must be greater than 0. Received: {Days}", request.Days);
-            return BadRequest(new { error = "Days must be greater than 0." });
+            _logger.LogWarning("GetTrend failed: Days must be between 1 and 30. Received: {Days}", request.Days);
+            return BadRequest(new { error = "Days must be between 1 and 30." });
         }
 
         try
         {
+            // 使用 UTC 时间计算开始时间
             var startTime = DateTime.UtcNow.AddDays(-request.Days);
 
             // 调用重构后的仓储层方法
@@ -141,8 +142,15 @@ public sealed class PlcDataController : Controller
             return BadRequest(new { error = "StartTime must be before EndTime." });
         }
 
+        if ((request.EndTime.Value - request.StartTime.Value).TotalDays > 30)
+        {
+            _logger.LogWarning("GetTrendRange failed: Time range exceeds 30 days.");
+            return BadRequest(new { error = "Time range must not exceed 30 days." });
+        }
+
         try
         {
+            // 注意：API 期望传入 UTC 时间。
             var result = await _repository.GetSensorTrendRangeAsync(
                 request.DeviceId, 
                 request.SensorName, 

@@ -33,8 +33,10 @@
 | :--- | :--- | :--- | :--- | :--- |
 | `DeviceId` | string | 是 | - | 设备 ID (例如: `ZTData`) |
 | `SensorName` | string | 是 | - | 传感器名称 (例如: `FT_YBB0002_L`) |
-| `Days` | int | 否 | `7` | 回溯天数 (必须大于 0) |
+| `Days` | int | 否 | `7` | 回溯天数 (1-30) |
 | `Granularity` | string | 否 | `Day` | 数据粒度。可选值: `Hour` (小时), `Day` (天) |
+
+*注: API 内部统一使用 UTC 时间进行计算。*
 
 **返回格式**:
 
@@ -82,9 +84,11 @@
 | :--- | :--- | :--- | :--- | :--- |
 | `DeviceId` | string | 是 | - | 设备 ID |
 | `SensorName` | string | 是 | - | 传感器名称 |
-| `StartTime` | DateTime | 是 | - | 开始时间 (ISO 8601 格式, 如 `2025-12-01`) |
-| `EndTime` | DateTime | 是 | - | 截止时间 (ISO 8601 格式, 如 `2025-12-07`) |
+| `StartTime` | DateTime | 是 | - | 开始时间 (ISO 8601 UTC 格式, 如 `2025-12-01T00:00:00Z`) |
+| `EndTime` | DateTime | 是 | - | 截止时间 (ISO 8601 UTC 格式, 如 `2025-12-07T00:00:00Z`) |
 | `Granularity` | string | 否 | `Day` | 数据粒度。可选值: `Hour`, `Day` |
+
+*注: 起止时间跨度不能超过 30 天，且所有时间均按 UTC 处理。*
 
 **响应示例**: 同上。
 

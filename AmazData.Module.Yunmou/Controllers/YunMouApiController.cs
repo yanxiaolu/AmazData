@@ -49,11 +49,11 @@ public class YunMouApiController : Controller
             });
         }
 
-        // 如果不成功，返回错误详情
+        // 如果不成功，返回错误详情 (424 Failed Dependency)
         _logger.LogWarning("Failed to get live address for Device: {DeviceSerial}. Code: {Code}, Message: {Message}", deviceSerial, result.Code, result.Message);
-        return Ok(new 
+        return StatusCode(424, new 
         { 
-            error = "Failed to get live address", 
+            error = "Failed to get live address from upstream", 
             upstreamCode = result.Code, 
             message = result.Message 
         });
