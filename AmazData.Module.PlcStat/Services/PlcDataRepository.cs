@@ -94,9 +94,15 @@ public class PlcDataRepository : IPlcDataRepository
                 ORDER BY 1 ASC";
         }
 
+        // 核心修复：调用 ToUniversalTime() 确保 Npgsql 不报错
         return await connection.QueryAsync<TrendDataPoint>(
             sql,
-            new { DeviceId = deviceId, SensorName = sensorName, StartTime = startTime, EndTime = endTime }
+            new { 
+                DeviceId = deviceId, 
+                SensorName = sensorName, 
+                StartTime = startTime.ToUniversalTime(), 
+                EndTime = endTime.ToUniversalTime() 
+            }
         );
     }
 }
