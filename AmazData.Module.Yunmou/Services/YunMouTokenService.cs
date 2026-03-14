@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Net.Http;
 using System.Net.Http.Json;
-using System.Threading.Tasks;
 using AmazData.Module.Yunmou.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

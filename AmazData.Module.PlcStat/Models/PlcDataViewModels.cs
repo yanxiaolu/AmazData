@@ -1,6 +1,3 @@
-using System;
-using System.Text.Json.Serialization;
-
 namespace AmazData.Module.PlcStat.Models;
 
 /// <summary>
@@ -67,7 +64,7 @@ public class TrendDataPoint
 {
     public string Time { get; set; }
     public double Value { get; set; }
-    
+
     // Optional: Add Min/Max/Count if the underlying table supports it and user wants more detail
     // public double Min { get; set; }
     // public double Max { get; set; }

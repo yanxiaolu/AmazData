@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Dapper;
 using Npgsql;
 using AmazData.Module.PlcStat.Models;
@@ -42,7 +39,7 @@ public class PlcDataRepository : IPlcDataRepository
 
         // 使用常量表名构建 SQL
         string sql = $"SELECT COUNT(*) FROM {TableName}";
-        
+
         return await connection.ExecuteScalarAsync<long>(sql);
     }
 
@@ -71,12 +68,12 @@ public class PlcDataRepository : IPlcDataRepository
         {
             // 按小时获取数据，并将输出转换为北京时间
             sql = $@"
-                SELECT 
-                    to_char(hour_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD HH24:MI:SS') as Time, 
+                SELECT
+                    to_char(hour_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD HH24:MI:SS') as Time,
                     avg_value as Value
                 FROM {TableName}
                 WHERE device_id = @DeviceId
-                  AND sensor_name = @SensorName 
+                  AND sensor_name = @SensorName
                   AND hour_time >= @StartTime
                   AND hour_time <= @EndTime
                 ORDER BY hour_time ASC";
@@ -85,12 +82,12 @@ public class PlcDataRepository : IPlcDataRepository
         {
             // 按天聚合数据，确保“天”的边界对齐北京时间零点
             sql = $@"
-                SELECT 
-                    to_char(date_trunc('day', hour_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Shanghai'), 'YYYY-MM-DD') as Time, 
+                SELECT
+                    to_char(date_trunc('day', hour_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Shanghai'), 'YYYY-MM-DD') as Time,
                     AVG(avg_value) as Value
                 FROM {TableName}
                 WHERE device_id = @DeviceId
-                  AND sensor_name = @SensorName 
+                  AND sensor_name = @SensorName
                   AND hour_time >= @StartTime
                   AND hour_time <= @EndTime
                 GROUP BY 1
@@ -98,7 +95,7 @@ public class PlcDataRepository : IPlcDataRepository
         }
 
         return await connection.QueryAsync<TrendDataPoint>(
-            sql, 
+            sql,
             new { DeviceId = deviceId, SensorName = sensorName, StartTime = startTime, EndTime = endTime }
         );
     }

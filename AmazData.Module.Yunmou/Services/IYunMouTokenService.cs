@@ -1,5 +1,3 @@
-using System.Threading.Tasks;
-
 namespace AmazData.Module.Yunmou.Services;
 
 /// <summary>

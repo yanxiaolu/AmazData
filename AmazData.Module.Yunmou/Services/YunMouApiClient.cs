@@ -1,7 +1,4 @@
-using System;
-using System.Net.Http;
 using System.Net.Http.Json;
-using System.Threading.Tasks;
 using AmazData.Module.Yunmou.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -13,6 +10,18 @@ namespace AmazData.Module.Yunmou.Services;
 /// </summary>
 public class YunMouApiClient : IYunMouApiClient
 {
+    private static readonly Action<ILogger, Exception?> _logUnauthorizedRefreshingToken =
+        LoggerMessage.Define(
+            LogLevel.Warning,
+            new EventId(1, nameof(GetVideoStreamUrlAsync)),
+            "Received 401 Unauthorized from Yunmou API. Attempting to refresh token...");
+
+    private static readonly Action<ILogger, Exception?> _logErrorGettingVideoStreamUrl =
+        LoggerMessage.Define(
+            LogLevel.Error,
+            new EventId(2, nameof(GetVideoStreamUrlAsync)),
+            "Error getting video stream url from Yunmou API.");
+
     private readonly HttpClient _httpClient;
     private readonly ILogger<YunMouApiClient> _logger;
     private readonly YunMouSettings _settings;
@@ -87,7 +96,7 @@ public class YunMouApiClient : IYunMouApiClient
             // 尝试强制刷新 Token 并重试一次
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
-                _logger.LogWarning("Received 401 Unauthorized from Yunmou API. Attempting to refresh token...");
+                _logUnauthorizedRefreshingToken(_logger, null);
                 
                 // 强制从 API 刷新 Token，更新数据库
                 accessToken = await _tokenService.GetAccessTokenAsync(true);
@@ -107,7 +116,7 @@ public class YunMouApiClient : IYunMouApiClient
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting video stream url from Yunmou API.");
+            _logErrorGettingVideoStreamUrl(_logger, ex);
             throw;
         }
     }

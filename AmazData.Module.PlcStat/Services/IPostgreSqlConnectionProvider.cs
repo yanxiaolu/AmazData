@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Configuration;
-
 namespace AmazData.Module.PlcStat.Services;
 
 /// <summary>

@@ -9,6 +9,54 @@ namespace AmazData.Module.Mqtt.Services;
 
 public class MqttConnectionManager : IMqttConnectionManager, IDisposable
 {
+    private static readonly Action<ILogger, string, Exception?> _logChannelWriteFailed =
+        LoggerMessage.Define<string>(
+            LogLevel.Warning,
+            new EventId(1, nameof(ConnectAsync)),
+            "[{Key}] Failed to write message to channel. Queue might be full.");
+
+    private static readonly Action<ILogger, string, string, Exception?> _logEnqueuedMessage =
+        LoggerMessage.Define<string, string>(
+            LogLevel.Debug,
+            new EventId(2, nameof(ConnectAsync)),
+            "[{Key}] Enqueued message from {Topic}");
+
+    private static readonly Action<ILogger, string, string, Exception?> _logMqttMessageProcessingError =
+        LoggerMessage.Define<string, string>(
+            LogLevel.Error,
+            new EventId(3, nameof(ConnectAsync)),
+            "[{Key}] Error processing MQTT message. Topic: {Topic}");
+
+    private static readonly Action<ILogger, string, string, Exception?> _logDisconnected =
+        LoggerMessage.Define<string, string>(
+            LogLevel.Warning,
+            new EventId(4, nameof(ConnectAsync)),
+            "[{Key}] Disconnected: {Reason}");
+
+    private static readonly Action<ILogger, string, Exception?> _logConnectionException =
+        LoggerMessage.Define<string>(
+            LogLevel.Error,
+            new EventId(5, nameof(ConnectAsync)),
+            "[{Key}] Connection exception");
+
+    private static readonly Action<ILogger, string, string, Exception?> _logSubscribedTopic =
+        LoggerMessage.Define<string, string>(
+            LogLevel.Information,
+            new EventId(6, nameof(SubscribeAsync)),
+            "[{Key}] 已订阅主题: {Topic}");
+
+    private static readonly Action<ILogger, string, string, Exception?> _logUnsubscribedTopic =
+        LoggerMessage.Define<string, string>(
+            LogLevel.Information,
+            new EventId(7, nameof(UnsubscribeAsync)),
+            "[{Key}] 已取消订阅主题: {Topic}");
+
+    private static readonly Action<ILogger, string, string, Exception?> _logPublishedMessage =
+        LoggerMessage.Define<string, string>(
+            LogLevel.Debug,
+            new EventId(8, nameof(PublishAsync)),
+            "[{Key}] 消息已发送 -> {Topic}");
+
     private readonly ConcurrentDictionary<string, IMqttClient> _clients = new();
     private readonly ConcurrentDictionary<string, ConcurrentBag<string>> _subscriptions = new();
     private readonly MqttClientFactory _clientFactory;
@@ -74,18 +122,19 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
                 // 2. 写入 Channel
                 if (!_messageChannel.TryWrite(eventArgs))
                 {
-                    _logger.LogWarning("[{Key}] Failed to write message to channel. Queue might be full.", config.Key);
+                    _logChannelWriteFailed(_logger, config.Key, null);
                 }
 
-                _logger.LogDebug("[{Key}] Enqueued message from {Topic}", config.Key, e.ApplicationMessage.Topic);
+                _logEnqueuedMessage(_logger, config.Key, e.ApplicationMessage.Topic, null);
             }
             catch (Exception ex)
             {
                 // 记录详细错误信息，包括出错的主题，方便排查
-                _logger.LogError(ex,
-                    "[{Key}] Error processing MQTT message. Topic: {Topic}",
+                _logMqttMessageProcessingError(
+                    _logger,
                     config.Key,
-                    e.ApplicationMessage?.Topic ?? "Unknown");
+                    e.ApplicationMessage?.Topic ?? "Unknown",
+                    ex);
             }
 
             await Task.CompletedTask;
@@ -93,7 +142,7 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
 
         client.DisconnectedAsync += e =>
         {
-            _logger.LogWarning("[{Key}] Disconnected: {Reason}", config.Key, e.Reason);
+            _logDisconnected(_logger, config.Key, e.Reason.ToString(), null);
             _subscriptions.TryRemove(config.Key, out _);
             return Task.CompletedTask;
         };
@@ -112,7 +161,7 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[{Key}] Connection exception", config.Key);
+            _logConnectionException(_logger, config.Key, ex);
             return false;
         }
     }
@@ -143,7 +192,7 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
         }
         
         // 可以在这里检查 result.Items 来确认每个 topic 的订阅结果
-        _logger.LogInformation($"[{key}] 已订阅主题: {topic}");
+        _logSubscribedTopic(_logger, key, topic, null);
     }
     
     public async Task UnsubscribeAsync(string key, string topic)
@@ -158,7 +207,7 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
             _subscriptions.AddOrUpdate(key, newTopics, (k, old) => newTopics);
         }
 
-        _logger.LogInformation($"[{key}] 已取消订阅主题: {topic}");
+        _logUnsubscribedTopic(_logger, key, topic, null);
     }
 
     public Task<IReadOnlyList<string>> GetSubscriptionsAsync(string key)
@@ -183,7 +232,7 @@ public class MqttConnectionManager : IMqttConnectionManager, IDisposable
             .Build();
 
         await client.PublishAsync(message);
-        _logger.LogDebug($"[{key}] 消息已发送 -> {topic}");
+        _logPublishedMessage(_logger, key, topic, null);
     }
 
     public async Task DisconnectAsync(string key)

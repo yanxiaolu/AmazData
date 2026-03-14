@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using AmazData.Module.Yunmou.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -11,6 +10,30 @@ namespace AmazData.Module.Yunmou.Controllers;
 [Route("api/yunmou")]
 public class YunMouApiController : Controller
 {
+    private static readonly Action<ILogger, string, int, Exception?> _logReceivedLiveAddressRequest =
+        LoggerMessage.Define<string, int>(
+            LogLevel.Information,
+            new EventId(1, nameof(GetLiveAddress)),
+            "Received request to get live address for Device: {DeviceSerial}, Channel: {ChannelNo}");
+
+    private static readonly Action<ILogger, Exception?> _logDeviceSerialRequired =
+        LoggerMessage.Define(
+            LogLevel.Warning,
+            new EventId(2, nameof(GetLiveAddress)),
+            "GetLiveAddress failed: Device Serial is required.");
+
+    private static readonly Action<ILogger, string, Exception?> _logRetrievedLiveAddress =
+        LoggerMessage.Define<string>(
+            LogLevel.Information,
+            new EventId(3, nameof(GetLiveAddress)),
+            "Successfully retrieved live address for Device: {DeviceSerial}");
+
+    private static readonly Action<ILogger, string, int, string, Exception?> _logFailedToGetLiveAddress =
+        LoggerMessage.Define<string, int, string>(
+            LogLevel.Warning,
+            new EventId(4, nameof(GetLiveAddress)),
+            "Failed to get live address for Device: {DeviceSerial}. Code: {Code}, Message: {Message}");
+
     private readonly IYunMouApiClient _yunMouApiClient;
     private readonly ILogger<YunMouApiController> _logger;
 
@@ -29,11 +52,11 @@ public class YunMouApiController : Controller
     [HttpGet("video")]
     public async Task<IActionResult> GetLiveAddress([FromQuery] string deviceSerial, [FromQuery] int channelNo)
     {
-        _logger.LogInformation("Received request to get live address for Device: {DeviceSerial}, Channel: {ChannelNo}", deviceSerial, channelNo);
+        _logReceivedLiveAddressRequest(_logger, deviceSerial, channelNo, null);
 
         if (string.IsNullOrWhiteSpace(deviceSerial))
         {
-            _logger.LogWarning("GetLiveAddress failed: Device Serial is required.");
+            _logDeviceSerialRequired(_logger, null);
             return BadRequest(new { error = "Device Serial is required." });
         }
 
@@ -42,7 +65,7 @@ public class YunMouApiController : Controller
         // 如果调用成功 (Code 200) 且有数据，仅返回 URL
         if (result.Code == 200 && result.Data != null)
         {
-            _logger.LogInformation("Successfully retrieved live address for Device: {DeviceSerial}", deviceSerial);
+            _logRetrievedLiveAddress(_logger, deviceSerial, null);
             return Ok(new 
             { 
                 url = result.Data.Url 
@@ -50,7 +73,7 @@ public class YunMouApiController : Controller
         }
 
         // 如果不成功，返回错误详情 (424 Failed Dependency)
-        _logger.LogWarning("Failed to get live address for Device: {DeviceSerial}. Code: {Code}, Message: {Message}", deviceSerial, result.Code, result.Message);
+        _logFailedToGetLiveAddress(_logger, deviceSerial, result.Code, result.Message ?? string.Empty, null);
         return StatusCode(424, new 
         { 
             error = "Failed to get live address from upstream", 
