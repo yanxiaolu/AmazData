@@ -41,6 +41,30 @@ namespace AmazData.Module.PlcStat.Controllers
                 new EventId(5, nameof(GetTrendRange)),
                 "Received request for sensor trend range. Device: {DeviceId}, Sensor: {SensorName}, Start: {StartTime}, End: {EndTime}, Granularity: {Granularity}");
 
+        private static readonly Action<ILogger, string, string, Exception?> _logRetrievedSensorTrend =
+            LoggerMessage.Define<string, string>(
+                LogLevel.Information,
+                new EventId(6, "RetrievedSensorTrend"),
+                "Successfully retrieved sensor trend for {DeviceId} - {SensorName}");
+
+        private static readonly Action<ILogger, string, string, Exception?> _logRetrievedSensorTrendRange =
+            LoggerMessage.Define<string, string>(
+                LogLevel.Information,
+                new EventId(7, "RetrievedSensorTrendRange"),
+                "Successfully retrieved sensor trend range for {DeviceId} - {SensorName}");
+
+        private static readonly Action<ILogger, string, string, Exception?> _logErrorGettingSensorTrend =
+            LoggerMessage.Define<string, string>(
+                LogLevel.Error,
+                new EventId(8, "ErrorGettingSensorTrend"),
+                "Error occurred while getting sensor trend for {DeviceId} - {SensorName}");
+
+        private static readonly Action<ILogger, string, string, Exception?> _logErrorGettingSensorTrendRange =
+            LoggerMessage.Define<string, string>(
+                LogLevel.Error,
+                new EventId(9, "ErrorGettingSensorTrendRange"),
+                "Error occurred while getting sensor trend range for {DeviceId} - {SensorName}");
+
         private readonly IPlcDataRepository _repository;
         private readonly ILogger<PlcDataController> _logger;
 
@@ -99,12 +123,12 @@ namespace AmazData.Module.PlcStat.Controllers
             {
                 var startTime = DateTime.UtcNow.AddDays(-request.Days);
                 var result = await _repository.GetSensorTrendAsync(request.DeviceId, request.SensorName, startTime, request.Granularity);
-                _logger.LogInformation("Successfully retrieved sensor trend for {DeviceId} - {SensorName}.", request.DeviceId, request.SensorName);
+                _logRetrievedSensorTrend(_logger, request.DeviceId, request.SensorName, null);
                 return Ok(result);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while getting sensor trend for {DeviceId} - {SensorName}.", request.DeviceId, request.SensorName);
+                _logErrorGettingSensorTrend(_logger, request.DeviceId, request.SensorName, ex);
                 return StatusCode(500, new { error = "An internal error occurred." });
             }
         }
@@ -133,12 +157,12 @@ namespace AmazData.Module.PlcStat.Controllers
                     request.EndTime.Value,
                     request.Granularity);
 
-                _logger.LogInformation("Successfully retrieved sensor trend range for {DeviceId} - {SensorName}.", request.DeviceId, request.SensorName);
+                _logRetrievedSensorTrendRange(_logger, request.DeviceId, request.SensorName, null);
                 return Ok(result);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while getting sensor trend range for {DeviceId} - {SensorName}.", request.DeviceId, request.SensorName);
+                _logErrorGettingSensorTrendRange(_logger, request.DeviceId, request.SensorName, ex);
                 return StatusCode(500, new { error = "An internal error occurred." });
             }
         }
