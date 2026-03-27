@@ -180,8 +180,8 @@ namespace AmazData.Module.PlcStat.Controllers
             if (string.IsNullOrWhiteSpace(request.SensorName))
                 return BadRequest(new { error = "SensorName is required." });
 
-            if (request.Days <= 0 || request.Days > 30)
-                return BadRequest(new { error = "Days must be between 1 and 30." });
+            if (request.Days <= 0 || request.Days > 365)
+                return BadRequest(new { error = "Days must be between 1 and 365." });
 
             return null;
         }
@@ -205,8 +205,8 @@ namespace AmazData.Module.PlcStat.Controllers
             if (request.StartTime > request.EndTime)
                 return BadRequest(new { error = "StartTime must be before EndTime." });
 
-            if ((request.EndTime.Value - request.StartTime.Value).TotalDays > 30)
-                return BadRequest(new { error = "Time range must not exceed 30 days." });
+            if ((request.EndTime.Value - request.StartTime.Value).TotalDays > 365)
+                return BadRequest(new { error = "Time range must not exceed 365 days." });
 
             return null;
         }
